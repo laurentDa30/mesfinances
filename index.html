@@ -301,16 +301,16 @@ function startInfo(){const s=S.config.start;if(!s||!s.date)return null;
   return {...s,balances:out,total:sum(Object.values(out),num),k:s.date.slice(0,7)}}
 function opCounted(o,st){if(!st)return true;const d=o.date||"";if(d.slice(0,7)>st.k)return true;if(d<st.date)return false;if(d>st.date)return true;return num(o.createdAt)>num(st.at)}
 function flowFromStart(k,st,B){
-  const c=compute(k), isStart=!!(st&&k===st.k), P=isStart?(st.passed||{}):{};
+  const c=compute(k), isStart=!!(st&&k===st.k), done=(key,day)=>isStart&&isPassed(st,key,day);
   const inB=x=>!B||bankOf(x)===B, ra=r=>recAmount(r,k), am=o=>num(o.amount);
-  const recs=S.recurring.filter(r=>!P[r.id]);
+  const recs=S.recurring.filter(r=>!done(r.id,r.day));
   const ops=c.ops.filter(o=>!isStart||opCounted(o,st));
   let inc=sum(recs.filter(r=>r.kind==="in"&&inB(r)),ra)+sum(ops.filter(o=>o.kind==="in"&&inB(o)),am);
   const fix=sum(recs.filter(r=>isOut(r)&&inB(r)),ra);
   let tin=0,tout=0;
   if(B){tin=sum(recs.filter(r=>r.kind==="transfer"&&toOf(r)===B),ra)+sum(ops.filter(o=>o.kind==="transfer"&&toOf(o)===B),am);
         tout=sum(recs.filter(r=>r.kind==="transfer"&&bankOf(r)===B),ra)+sum(ops.filter(o=>o.kind==="transfer"&&bankOf(o)===B),am)}
-  const save=sum(S.accounts.filter(a=>!P["acc:"+a.id]&&inB(a)),a=>num(a.monthly))+sum(ops.filter(o=>o.kind==="save"&&inB(o)),am);
+  const save=sum(S.accounts.filter(a=>!done("acc:"+a.id,a.day)&&inB(a)),a=>num(a.monthly))+sum(ops.filter(o=>o.kind==="save"&&inB(o)),am);
   const outs=ops.filter(o=>o.kind==="out"&&inB(o));
   const life=sum(outs.filter(o=>LIFE.has(o.cat)),am), other=sum(outs.filter(o=>!LIFE.has(o.cat)),am);
   let allowance=0;
@@ -318,9 +318,11 @@ function flowFromStart(k,st,B){
   const vari=other+Math.max(life,allowance);
   return {inc,fix,save,vari,tin,tout,net:inc+tin-fix-tout-save-vari,life,allowance};
 }
-function pendingItems(st){const k=st.k,P=st.passed||{},bn=x=>multi()?" · "+(x.kind==="transfer"?bankName(bankOf(x))+" → "+bankName(toOf(x)):bankName(bankOf(x))):"";
-  return [...S.recurring.filter(r=>!P[r.id]&&recAmount(r,k)>0&&(!multi()||r.kind!=="transfer"||true)).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
-    ...S.accounts.filter(a=>num(a.monthly)>0&&!P["acc:"+a.id]).map(a=>({l:"Virement vers "+a.name+bn(a),a:num(a.monthly),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
+/* Déjà passé au moment du point : coché (true), décoché explicitement (false), sinon déduit du jour du mois */
+function isPassed(st,key,day){const P=st.passed||{};if(P[key]===true)return true;if(P[key]===false)return false;return has(day)&&num(day)<=num(st.date.slice(8,10))}
+function pendingItems(st){const k=st.k,bn=x=>multi()?" · "+(x.kind==="transfer"?bankName(bankOf(x))+" → "+bankName(toOf(x)):bankName(bankOf(x))):"";
+  return [...S.recurring.filter(r=>!isPassed(st,r.id,r.day)&&recAmount(r,k)>0).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
+    ...S.accounts.filter(a=>num(a.monthly)>0&&!isPassed(st,"acc:"+a.id,a.day)).map(a=>({l:"Virement vers "+a.name+bn(a),a:num(a.monthly),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
 function essentialsMonthly(){return sum(S.recurring.filter(r=>isOut(r)&&r.essential!==false&&activeNow(r)),monthlyEq)}
 function emergency(){
@@ -396,8 +398,8 @@ function alerts(k){
   const c=compute(k), A=[], cfg=S.config;
   const st=startInfo();
   if(st&&k===st.k){const P=st.passed||{};
-    const nod=[...S.recurring.filter(r=>r.kind!=="in"&&!P[r.id]&&!has(r.day)&&recAmount(r,k)>0).map(r=>({l:r.label,a:recAmount(r,k)})),
-      ...S.accounts.filter(a=>num(a.monthly)>0&&!P["acc:"+a.id]&&!has(a.day)).map(a=>({l:a.name,a:num(a.monthly)}))];
+    const nod=[...S.recurring.filter(r=>r.kind!=="in"&&!isPassed(st,r.id,r.day)&&!has(r.day)&&recAmount(r,k)>0).map(r=>({l:r.label,a:recAmount(r,k)})),
+      ...S.accounts.filter(a=>num(a.monthly)>0&&!isPassed(st,"acc:"+a.id,a.day)&&!has(a.day)).map(a=>({l:a.name,a:num(a.monthly)}))];
     if(nod.length)A.push({lvl:"warn",t:`Point à vérifier : ${e0(sum(nod,x=>x.a))} encore considérés « à venir »`,p:`${nod.length} prélèvements ou virements sans jour n'ont pas été cochés au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR")} (${nod.slice(0,4).map(x=>x.l).join(", ")}${nod.length>4?"…":""}). S'ils sont déjà passés, refais le point en les cochant, sinon ton solde prévu est trop bas. Indique leur jour du mois pour que ce soit automatique.`,act:"start",btn:"Refaire le point"})}
   if(st&&k>=st.k){const b=projBal(k);
     if(b<0)A.push({lvl:"bad",t:`Découvert prévu : ${e0(b)} fin ${monthName(k,true)}`,p:`Avec ton solde du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR")} et ce qui reste à passer, ton compte finirait à découvert. Décale un achat ou réduis temporairement un versement d'épargne.`});
@@ -823,7 +825,7 @@ function startSheet(){
     const L=[...S.recurring.map(r=>({id:r.id,label:r.label+bn(r),amt:recAmount(r,k),sign:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",day:r.day})).filter(x=>x.amt>0),
       ...S.accounts.filter(a=>num(a.monthly)>0).map(a=>({id:"acc:"+a.id,label:"Virement vers "+a.name+bn(a),amt:num(a.monthly),sign:"→ ",day:a.day}))];
     L.sort((a,b)=>(has(a.day)?num(a.day):99)-(has(b.day)?num(b.day):99));
-    return L.map(x=>{const pre=prev.date&&prev.date.slice(0,7)===k&&prev.passed&&prev.passed[x.id]?true:has(x.day)&&num(x.day)<=day;
+    return L.map(x=>{const prevKnown=prev.date&&prev.date.slice(0,7)===k&&prev.passed&&typeof prev.passed[x.id]==="boolean";const pre=prevKnown?prev.passed[x.id]:has(x.day)&&num(x.day)<=day;
       return `<label class="check passrow"><input type="checkbox" name="passed" value="${esc(x.id)}" ${pre?"checked":""}><span style="flex:1;min-width:0">${esc(x.label)}${has(x.day)?` <span class="note">le ${num(x.day)}</span>`:""}</span><span class="num">${x.sign}${e2(x.amt)}</span></label>`}).join("")||'<p class="note">Aucun mouvement automatique ce mois-ci.</p>'};
   const d0=todayISO();
   sheet("Faire le point",`
@@ -834,11 +836,11 @@ function startSheet(){
     <div class="field"><label>Déjà passé sur ton compte ce mois-ci</label><span class="hint">Coche seulement ce qui est apparu sur ton relevé <b>depuis le 1er du mois</b> : c'est déjà compris dans ton solde. Ce qui n'est pas coché sera compté d'ici la fin du mois. Attention au salaire : celui reçu fin du mois dernier ne compte pas, celui de ce mois-ci n'est peut-être pas encore arrivé.</span><div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" id="chkAll">Tout cocher</button><button type="button" class="btn small" id="chkNone">Tout décocher</button></div><div id="passList" class="passlist">${items(d0)}</div></div>
     ${S.accounts.length?`<details><summary>Mettre à jour mes livrets (facultatif)</summary><div class="grid2" style="margin-top:10px">${S.accounts.map(a=>`<div class="field"><label for="stA_${a.id}">${esc(a.name)}</label><input id="stA_${a.id}" name="acc_${a.id}" inputmode="decimal" value="${has(a.balance)?String(Math.round(accEst(a)*100)/100).replace(".",","):""}" placeholder="Solde"></div>`).join("")}</div></details>`:""}
     <div class="actions"><button class="btn primary">Enregistrer le point</button></div>`,
-  async fd=>{
+  async (fd,f)=>{
     const date=fd.get("date");if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error("Choisis une date.");
     const balances={};
     for(const id of (S.banks.length?S.banks.map(b=>b.id):["main"])){const b=String(fd.get("bal_"+id)||"").trim().replace("−","-");if(!has(b))throw new Error(S.banks.length?`Indique le solde de ${bankName(id)} (0 s'il est vide).`:"Indique le solde de ton compte.");balances[id]=Math.round(num(b)*100)/100}
-    const passed={};fd.getAll("passed").forEach(id=>passed[id]=true);
+    const passed={};f.querySelectorAll('#passList input[name="passed"]').forEach(i=>passed[i.value]=i.checked);
     const cfg={...S.config,start:{date,balances,passed,at:Date.now()}};
     await putConfig(cfg);
     for(const a of S.accounts){const v=fd.get("acc_"+a.id);if(v===null)continue;
