@@ -103,6 +103,11 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .tag{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);font-weight:600}
 .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.off{text-decoration:line-through}
 .grouplbl{padding:8px 14px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:var(--sunk);font-weight:600;display:flex;justify-content:space-between}
+.eq{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;margin-top:6px;padding:10px 12px;background:var(--sunk);border-radius:var(--r-s)}
+.eq .eqt{font-weight:700;border-top:1px solid var(--line);padding-top:4px;margin-top:2px}
+.pend summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--accent);margin-top:4px}
+.pendlist{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:14px}
+.pendlist>div{display:flex;justify-content:space-between;gap:12px}
 .groups{display:flex;flex-direction:column;gap:8px}
 .grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;font-weight:600}
@@ -311,6 +316,9 @@ function flowFromStart(k,st,B){
   const vari=other+Math.max(life,allowance);
   return {inc,fix,save,vari,tin,tout,net:inc+tin-fix-tout-save-vari,life,allowance};
 }
+function pendingItems(st){const k=st.k,P=st.passed||{},bn=x=>multi()?" · "+(x.kind==="transfer"?bankName(bankOf(x))+" → "+bankName(toOf(x)):bankName(bankOf(x))):"";
+  return [...S.recurring.filter(r=>!P[r.id]&&recAmount(r,k)>0&&(!multi()||r.kind!=="transfer"||true)).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
+    ...S.accounts.filter(a=>num(a.monthly)>0&&!P["acc:"+a.id]).map(a=>({l:"Virement vers "+a.name+bn(a),a:num(a.monthly),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
 function essentialsMonthly(){return sum(S.recurring.filter(r=>isOut(r)&&r.essential!==false&&activeNow(r)),monthlyEq)}
 function emergency(){
@@ -459,6 +467,8 @@ function viewMois(){
   const seg=(v,cls)=>v>0?`<span class="${cls}" style="width:${(v/base*100).toFixed(2)}%"></span>`:"";
   const over=Math.max(0,-f.net);
   const stOld=st&&diffM(st.k,CUR)>=1;
+  const inStart=!!(useStart&&viewMonth===st.k);
+  const pend=inStart?pendingItems(st):[];
   let h=`<div class="month"><button class="iconbtn" data-act="prev" aria-label="Mois précédent"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="lbl">${monthName(viewMonth)}</div><button class="iconbtn" data-act="next" aria-label="Mois suivant"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
   ${!isCur?`<div style="text-align:center;margin-top:-10px"><button class="btn small" data-act="today">Revenir à ce mois-ci</button></div>`:""}
   ${!st&&!readOnly?`<section class="card" style="display:flex;flex-direction:column;gap:8px;border-color:var(--accent)"><h2>Fais le point sur ton compte</h2><p class="muted" style="margin:0">Indique combien tu as aujourd'hui sur ton compte courant et ce qui est déjà passé ce mois-ci. L'application calcule ensuite ton solde prévu, mois après mois.</p><div><button class="btn primary" data-act="start">Faire le point</button></div></section>`:""}
@@ -470,12 +480,13 @@ function viewMois(){
     ${perBank.length?`<div class="banks">${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}</div>`:""}
     <div class="flow" role="img" aria-label="Répartition des entrées du mois">${seg(f.fix,"c-fix")}${seg(f.save,"c-save")}${seg(f.vari,"c-var")}${seg(Math.max(0,f.net),"c-rest")}${seg(over,"c-over")}</div>
     <div class="legend">
-      <div><i class="c-fix"></i>Charges fixes<b>${e0(f.fix)}</b></div>
-      <div><i class="c-save"></i>Épargne versée<b>${e0(f.save)}</b></div>
+      <div><i class="c-fix"></i>${inStart?"Charges encore à venir":"Charges fixes"}<b>${e0(f.fix)}</b></div>
+      <div><i class="c-save"></i>${inStart?"Épargne encore à venir":"Épargne versée"}<b>${e0(f.save)}</b></div>
       <div><i class="c-var"></i>Dépenses ponctuelles<b>${e0(f.vari)}</b></div>
       <div><i class="${f.net<0?"c-over":"c-rest"}"></i>${f.net<0?"Manque du mois":"Reste du mois"}<b>${e0(f.net)}</b></div>
     </div>
-    <div class="note">${useStart&&viewMonth===st.k?`Depuis ton point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})} (${e0(st.total)}) : ${e0(f.inc)} d'entrées encore à venir, sorties restantes ci-dessus.`:useStart?`Solde de départ du mois ${e0(v-f.net)} · ${e0(f.inc)} d'entrées.`:`Sur ${e0(f.inc)} d'entrées ce mois-ci.`}</div>
+    ${inStart?`<div class="eq"><span>Solde au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><b class="num">${e0(st.total)}</b>${f.inc+f.tin>0?`<span>+ entrées encore à venir</span><b class="num">${e0(f.inc)}</b>`:""}<span>− sorties encore à venir</span><b class="num">${e0(f.fix+f.save+f.vari)}</b><span class="eqt">= solde prévu fin ${monthName(viewMonth,true)}</span><b class="num eqt">${e0(v)}</b></div>
+    <details class="pend"><summary>Ce qui est compté comme « encore à venir » (${pend.length})</summary><div class="pendlist">${pend.map(x=>`<div><span>${esc(x.l)}${x.d?` <span class="note">le ${x.d}</span>`:""}</span><span class="num">${x.s}${e2(x.a)}</span></div>`).join("")||'<span class="note">Rien : tout est déjà passé.</span>'}</div><p class="note" style="margin:6px 0 0">Si une ligne est déjà passée sur ton compte, refais le point et coche-la : sinon elle est retirée deux fois.</p></details>`:`<div class="note">${useStart?`Solde de départ du mois ${e0(v-f.net)} · ${e0(f.inc)} d'entrées.`:`Sur ${e0(f.inc)} d'entrées ce mois-ci.`}</div>`}
     ${st&&!readOnly?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">${stOld?'<span class="pill warn">Point de plus d\'un mois</span>':""}<button class="btn small" data-act="start">Refaire le point</button></div>`:""}
     ${useStart&&viewMonth===st.k&&c.budget>0?`<div class="note" style="margin-top:6px">Vie courante d'ici la fin du mois : ${e0(f.allowance)} réservés (au prorata des jours restants), ${e0(f.life)} saisis depuis le point.</div>`:c.budget>0?`<div class="note" style="margin-top:6px">Dont vie courante : ${e0(c.life)} saisis sur un budget de ${e0(c.budget)}${c.lifeProj>c.life?` (le reste du budget est déjà réservé)`:""}.</div>`:""}
     ${isCur&&c.budget>0?gauge(c):""}
