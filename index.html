@@ -520,13 +520,14 @@ function opsList(c){
     return `<button class="row" data-act="op:${o.id}"><div class="main"><div>${esc(o.label||o.cat||"Opération")}</div><div class="sub">${new Date(o.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · ${o.kind==="transfer"?"Virement":esc(o.kind==="save"?(acc?acc.name:"Épargne"):o.cat||"")}${btag(o)}${o.kind==="out"&&LIFE.has(o.cat)?'<span class="tag">vie courante</span>':""}${!opCounted(o,startInfo())?'<span class="tag">avant le point, déjà dans le solde</span>':""}</div></div><div class="amt ${o.kind==="in"?"pos":o.kind==="save"||o.kind==="transfer"?"sav":"neg"}">${sign}${e2(num(o.amount))}</div></button>`};
   const none=t=>`<div class="row muted" style="cursor:default">${t}</div>`;
   const opsOut=sum(ops.filter(o=>o.kind==="out"),o=>num(o.amount));
+  const cnt=(n,t)=>`${n} · ${e0(t)}`;
   const grp=(key,label,right,inner)=>`<details class="grp" data-grp="${key}" ${openGroups.has(key)?"open":""}><summary><span class="glbl">${label}</span><span class="num gtot">${right}</span><span class="chev" aria-hidden="true"></span></summary><div class="glist">${inner}</div></details>`;
   return `<div class="groups">
-    ${grp("ponct","Ponctuelles",ops.length?`${ops.length} · ${e0(opsOut)}`:"0",ops.length?ops.map(opRow).join(""):none("Aucune opération ponctuelle ce mois-ci. Utilise « Ajouter » pour noter une dépense."))}
-    ${grp("in","Revenus automatiques",e0(c.recIn),ins.map(recRow).join("")||none("Aucun"))}
-    ${grp("out","Charges automatiques",e0(c.recOut),outs.map(recRow).join("")||none("Aucune"))}
-    ${trs.length?grp("trs","Virements entre comptes",e0(sum(trs,x=>x.a)),trs.map(recRow).join("")):""}
-    ${grp("save","Épargne programmée",e0(c.planned),accRows||none("Aucun versement programmé"))}
+    ${grp("ponct","Ponctuelles",cnt(ops.length,opsOut),ops.length?ops.map(opRow).join(""):none("Aucune opération ponctuelle ce mois-ci. Utilise « Ajouter » pour noter une dépense."))}
+    ${grp("in","Revenus automatiques",cnt(ins.length,c.recIn),ins.map(recRow).join("")||none("Aucun"))}
+    ${grp("out","Charges automatiques",cnt(outs.length,c.recOut),outs.map(recRow).join("")||none("Aucune"))}
+    ${trs.length?grp("trs","Virements entre comptes",cnt(trs.length,sum(trs,x=>x.a)),trs.map(recRow).join("")):""}
+    ${grp("save","Épargne programmée",cnt(S.accounts.filter(a=>num(a.monthly)>0).length,c.planned),accRows||none("Aucun versement programmé"))}
   </div>`;
 }
 
