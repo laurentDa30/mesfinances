@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E131A" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -158,7 +158,8 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .sheet .head h2{flex:1}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:13px;font-weight:600;color:var(--muted)}
-.field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:10px 12px;width:100%;min-width:0}
+.field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:10px 12px;width:100%;min-width:0;font-size:16px}
+html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
 .field input.bigin{font-family:var(--f-display);font-size:28px;font-weight:700;padding:8px 12px}
 .field .hint{font-size:12.5px;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -452,7 +453,8 @@ function render(){
   else html+={mois:viewMois,fixes:viewFixes,epargne:viewEpargne,avenir:viewAvenir}[tab]();
   m.innerHTML=html;
   $("#fab")?.remove();
-  if(tab==="mois"&&!readOnly&&!empty){const b=document.createElement("button");b.className="fab";b.id="fab";b.dataset.act="addop";b.innerHTML=`<span aria-hidden="true">＋</span> Ajouter`;document.body.appendChild(b)}
+  const fabAct={mois:"addop",fixes:"addrec",epargne:"addacc"}[tab];
+  if(fabAct&&!readOnly&&!empty){const b=document.createElement("button");b.className="fab";b.id="fab";b.dataset.act=fabAct;b.setAttribute("aria-label",{addop:"Ajouter une opération",addrec:"Ajouter une entrée ou une charge fixe",addacc:"Ajouter un compte d'épargne"}[fabAct]);b.innerHTML=`<span aria-hidden="true">＋</span> Ajouter`;document.body.appendChild(b)}
   if(tab==="epargne")updateSim();
   if(tab==="avenir")updateLong();
 }
@@ -1017,7 +1019,7 @@ async function boot(){
 /* ---------- Événements ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-tab],[data-act]"); if(!t)return;
-  if(t.dataset.tab){tab=t.dataset.tab;try{history.replaceState(null,"","#"+tab)}catch{}render();window.scrollTo({top:0});return}
+  if(t.dataset.tab){goTab(t.dataset.tab,0);return}
   const a=t.dataset.act; if(a==="close"){if(e.target===t||t.tagName==="BUTTON")closeSheet();return}
   const [k,id]=a.split(":");
   if(k==="prev"){viewMonth=addM(viewMonth,-1);render()} else if(k==="next"){viewMonth=addM(viewMonth,1);render()} else if(k==="today"){viewMonth=CUR;render()}
@@ -1038,6 +1040,20 @@ document.addEventListener("click",e=>{
   else if(k==="proj"){const x=S.projects.find(y=>y.id===id);x&&projSheet(x)}
 });
 document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.grp){d.open?openGroups.add(d.dataset.grp):openGroups.delete(d.dataset.grp)}},true);
+/* Navigation au doigt : balayer à gauche / à droite pour changer d'onglet */
+const TABS=["mois","fixes","epargne","avenir"];
+function goTab(t,dir){if(t===tab)return;tab=t;try{history.replaceState(null,"","#"+tab)}catch{}render();window.scrollTo({top:0});
+  if(dir&&!matchMedia("(prefers-reduced-motion: reduce)").matches){try{$("#main").animate([{transform:`translateX(${dir*28}px)`,opacity:.35},{transform:"none",opacity:1}],{duration:200,easing:"ease-out"})}catch{}}}
+(()=>{let sx=0,sy=0,t0=0,ok=false;
+  document.addEventListener("touchstart",e=>{ok=false;if(e.touches.length!==1||$("#layer").innerHTML||mode==="login")return;const t=e.touches[0],el=e.target;
+    if(el.closest&&el.closest("input,select,textarea,nav.tabs,.passlist"))return;if(t.clientX<24||t.clientX>window.innerWidth-24)return;
+    sx=t.clientX;sy=t.clientY;t0=Date.now();ok=true},{passive:true});
+  document.addEventListener("touchend",e=>{if(!ok)return;ok=false;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+    if(Date.now()-t0>700||Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8)return;
+    const j=TABS.indexOf(tab)+(dx<0?1:-1);if(j>=0&&j<TABS.length)goTab(TABS[j],dx<0?1:-1)},{passive:true});
+  // iOS : bloque le zoom à deux doigts
+  ["gesturestart","gesturechange"].forEach(n=>document.addEventListener(n,e=>e.preventDefault(),{passive:false}));
+})();
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#layer").innerHTML)closeSheet()});
 document.addEventListener("input",e=>{
   const id=e.target.id;
