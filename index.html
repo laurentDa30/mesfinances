@@ -173,7 +173,9 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;z-index:30;font-size:14px}
 details summary{cursor:pointer;font-weight:600}
 .banks{display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--line)}
-.bankrow{display:flex;justify-content:space-between;gap:12px;font-size:14.5px}
+.bankrow{display:grid;grid-template-columns:1fr auto auto;gap:4px 16px;font-size:14.5px;align-items:baseline}
+.bankrow>*:not(:first-child){text-align:right;min-width:72px}
+.bankhead{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 .negt{color:var(--bad)}
 .passlist{display:flex;flex-direction:column;max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r-s);padding:0 12px}
 .passrow input{width:auto;flex:none;margin:0}
@@ -460,7 +462,7 @@ function viewMois(){
   const st=startInfo(), useStart=!!(st&&viewMonth>=st.k);
   const f=useStart?flowFromStart(viewMonth,st):{inc:c.inc,fix:c.recOut,save:c.save,vari:past?c.other+c.life:c.other+c.lifeProj,net:past?c.resteNow:c.resteEst};
   const v=useStart?projBal(viewMonth):f.net;
-  const perBank=useStart&&multi()?S.banks.map(b=>({b,v:projBal(viewMonth,b.id)})):[];
+  const perBank=useStart&&multi()?S.banks.map(b=>({b,v:projBal(viewMonth,b.id),from:viewMonth===st.k?num(st.balances[b.id]):projBal(addM(viewMonth,-1),b.id)})):[];
   const negBank=perBank.some(x=>x.v<0);
   const status=v<0?["bad",useStart?"Découvert prévu":"Dans le rouge"]:negBank?["warn","Un compte à découvert"]:v<num(S.config.cushion)?["warn","Marge faible"]:["good","Ça tient"];
   const base=Math.max(f.inc,f.fix+f.save+f.vari,1);
@@ -477,7 +479,7 @@ function viewMois(){
     <div class="k">${useStart?`Solde prévu ${multi()?"sur tes comptes":"sur ton compte"} fin ${monthName(viewMonth,true)}`:past?"Il est resté en fin de mois":"Il devrait te rester en fin de mois"}</div>
     <div class="big ${v<0?"neg":""}">${e0(v)}</div>
     <span class="pill ${status[0]}">${status[1]}</span>
-    ${perBank.length?`<div class="banks">${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}</div>`:""}
+    ${perBank.length?`<div class="banks"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span><span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span><b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}</div>`:""}
     <div class="flow" role="img" aria-label="Répartition des entrées du mois">${seg(f.fix,"c-fix")}${seg(f.save,"c-save")}${seg(f.vari,"c-var")}${seg(Math.max(0,f.net),"c-rest")}${seg(over,"c-over")}</div>
     <div class="legend">
       <div><i class="c-fix"></i>${inStart?"Charges encore à venir":"Charges fixes"}<b>${e0(f.fix)}</b></div>
