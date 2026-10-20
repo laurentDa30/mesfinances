@@ -103,6 +103,18 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .tag{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);font-weight:600}
 .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.off{text-decoration:line-through}
 .grouplbl{padding:8px 14px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:var(--sunk);font-weight:600;display:flex;justify-content:space-between}
+.groups{display:flex;flex-direction:column;gap:8px}
+.grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;font-weight:600}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary:hover{background:var(--sunk)}
+.grp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.grp .glbl{flex:1;min-width:0}
+.grp .gtot{color:var(--muted);font-weight:500;font-size:14px}
+.grp .chev{width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin:-4px 2px 0 4px;transition:transform .15s}
+.grp[open] .chev{transform:rotate(225deg);margin-top:4px}
+.grp .glist{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){.grp .chev{transition:none}}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .stats.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:560px){.stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}.stat{padding:10px}}
@@ -216,6 +228,7 @@ let viewMonth=CUR;
 let tab=(()=>{const h=(location.hash||"").slice(1);return ["mois","fixes","epargne","avenir"].includes(h)?h:"mois"})();
 let sim={acc:null,monthly:100,once:0,months:24,target:""};
 let longMonthly=null;
+const openGroups=new Set();
 
 /* ---------- Outils ---------- */
 function mk(y,m){return y+"-"+String(m).padStart(2,"0")}
@@ -505,13 +518,15 @@ function opsList(c){
   const accRows=S.accounts.filter(a=>num(a.monthly)>0).map(a=>`<button class="row" data-act="acc:${a.id}"><div class="main"><div>${esc(a.name)}</div><div class="sub">Versement programmé${btag(a)}</div></div><div class="amt sav">→ ${e2(num(a.monthly))}</div></button>`).join("");
   const opRow=o=>{const sign=o.kind==="in"?"+":o.kind==="save"?"→ ":o.kind==="transfer"?"⇄ ":"−";const acc=o.kind==="save"?S.accounts.find(a=>a.id===o.account):null;
     return `<button class="row" data-act="op:${o.id}"><div class="main"><div>${esc(o.label||o.cat||"Opération")}</div><div class="sub">${new Date(o.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · ${o.kind==="transfer"?"Virement":esc(o.kind==="save"?(acc?acc.name:"Épargne"):o.cat||"")}${btag(o)}${o.kind==="out"&&LIFE.has(o.cat)?'<span class="tag">vie courante</span>':""}${!opCounted(o,startInfo())?'<span class="tag">avant le point, déjà dans le solde</span>':""}</div></div><div class="amt ${o.kind==="in"?"pos":o.kind==="save"||o.kind==="transfer"?"sav":"neg"}">${sign}${e2(num(o.amount))}</div></button>`};
-  return `<div class="list">
-    <div class="grouplbl"><span>Ponctuelles</span><span class="num">${ops.length}</span></div>
-    ${ops.length?ops.map(opRow).join(""):`<div class="row" style="cursor:default"><div class="main muted">Aucune opération ponctuelle ce mois-ci. Utilise « Ajouter » pour noter une dépense.</div></div>`}
-    <div class="grouplbl"><span>Revenus automatiques</span><span class="num">${e0(c.recIn)}</span></div>${ins.map(recRow).join("")||`<div class="row muted" style="cursor:default">Aucun</div>`}
-    <div class="grouplbl"><span>Charges automatiques</span><span class="num">${e0(c.recOut)}</span></div>${outs.map(recRow).join("")||`<div class="row muted" style="cursor:default">Aucune</div>`}
-    ${trs.length?`<div class="grouplbl"><span>Virements entre comptes</span><span class="num">${e0(sum(trs,x=>x.a))}</span></div>${trs.map(recRow).join("")}`:""}
-    <div class="grouplbl"><span>Épargne programmée</span><span class="num">${e0(c.planned)}</span></div>${accRows||`<div class="row muted" style="cursor:default">Aucun versement programmé</div>`}
+  const none=t=>`<div class="row muted" style="cursor:default">${t}</div>`;
+  const opsOut=sum(ops.filter(o=>o.kind==="out"),o=>num(o.amount));
+  const grp=(key,label,right,inner)=>`<details class="grp" data-grp="${key}" ${openGroups.has(key)?"open":""}><summary><span class="glbl">${label}</span><span class="num gtot">${right}</span><span class="chev" aria-hidden="true"></span></summary><div class="glist">${inner}</div></details>`;
+  return `<div class="groups">
+    ${grp("ponct","Ponctuelles",ops.length?`${ops.length} · ${e0(opsOut)}`:"0",ops.length?ops.map(opRow).join(""):none("Aucune opération ponctuelle ce mois-ci. Utilise « Ajouter » pour noter une dépense."))}
+    ${grp("in","Revenus automatiques",e0(c.recIn),ins.map(recRow).join("")||none("Aucun"))}
+    ${grp("out","Charges automatiques",e0(c.recOut),outs.map(recRow).join("")||none("Aucune"))}
+    ${trs.length?grp("trs","Virements entre comptes",e0(sum(trs,x=>x.a)),trs.map(recRow).join("")):""}
+    ${grp("save","Épargne programmée",e0(c.planned),accRows||none("Aucun versement programmé"))}
   </div>`;
 }
 
@@ -1006,6 +1021,7 @@ document.addEventListener("click",e=>{
   else if(k==="acc"){const x=S.accounts.find(y=>y.id===id);x&&accSheet(x)}
   else if(k==="proj"){const x=S.projects.find(y=>y.id===id);x&&projSheet(x)}
 });
+document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.grp){d.open?openGroups.add(d.dataset.grp):openGroups.delete(d.dataset.grp)}},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#layer").innerHTML)closeSheet()});
 document.addEventListener("input",e=>{
   const id=e.target.id;
