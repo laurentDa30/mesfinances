@@ -418,7 +418,7 @@ function render(){
   const m=$("#main");
   let html="";
   if(mode==="api"&&api.migrate)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Ton compte en ligne est vide, mais cet appareil contient des données. Les envoyer vers ton compte ?</span><button class="btn small primary" data-act="migrate">Envoyer</button></div>`;
-  if(mode==="api"&&api.error)html+=`<div class="banner" style="background:var(--bad-soft)">Le serveur refuse l'enregistrement : ${esc(api.error)}. Tes modifications restent sur l'appareil.</div>`;
+  if(mode==="api"&&api.error)html+=`<div class="banner" style="background:var(--bad-soft)"><b>Le serveur ne répond pas correctement</b> : ${esc(api.error)}. Rien n'est enregistré en ligne pour l'instant ; tes modifications restent sur cet appareil et partiront dès que le problème sera réglé.</div>`;
   if(mode==="demo")html+=`<div class="banner"><b>Exemple.</b> Ces chiffres sont fictifs. Ouvre la page depuis Claude pour retrouver tes propres comptes.</div>`;
   if(mode==="local"&&(S.recurring.length||S.accounts.length)){const le=S.config.lastExport, age=le?Math.round((today-new Date(le+"T12:00"))/864e5):null;
     if(age===null||age>30)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Tes données sont uniquement sur cet appareil. ${age===null?"Fais une première sauvegarde":"Dernière sauvegarde il y a "+age+" jours"} pour ne rien perdre.</span><button class="btn small" data-act="export">Sauvegarder</button></div>`}
@@ -904,7 +904,7 @@ async function pull(){
   if(api.queue.length){await flush();if(api.queue.length)return}
   try{const r=await fetch("/api/state",{cache:"no-store"});
     if(r.status===401){mode="login";render();return}
-    if(!r.ok)throw new Error();
+    if(!r.ok){const j=await r.json().catch(()=>({}));api.error=j.error||("Erreur serveur "+r.status);api.online=true;render();return}
     const d=await r.json(), before=S;
     const serverEmpty=!(d.recurring||[]).length&&!(d.accounts||[]).length&&!(d.ops||[]).length;
     if(serverEmpty&&(before.recurring.length||before.accounts.length)){api.migrate=JSON.parse(JSON.stringify(before));render();return}
