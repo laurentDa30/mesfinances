@@ -125,6 +125,11 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .envrow .hint{grid-column:1/-1;margin-top:-4px}
 .caldetail{background:var(--sunk);border-radius:var(--r-s);padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:4px}
 .cdrow{display:flex;justify-content:space-between;gap:12px}.cdrow .pos{color:var(--good)}
+.simactions{display:flex;flex-direction:column;gap:10px}
+.simact{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:var(--r-s);padding:10px 12px}
+.simact.col{flex-direction:column;align-items:stretch}
+.simproj{display:flex;gap:8px}
+.simproj input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:8px 10px;font-size:16px}
 .calentry{display:flex;align-items:center;gap:12px}
 .calentry h2{font-size:16px;margin-bottom:2px}
 .daychip{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-family:var(--f-num);font-size:13px;font-weight:600}
@@ -819,11 +824,18 @@ function simHtml(){
       <div class="field"><label for="simTarget">Montant visé (facultatif)</label><input id="simTarget" inputmode="decimal" value="${esc(sim.target)}" placeholder="ex. 5000"></div>
     </div>
     <div id="simOut"></div>
+    <div id="simActions" class="simactions"></div>
     <p class="note" style="margin:0">Estimation. Les livrets réglementés calculent les intérêts par quinzaine et les versent au 31 décembre ; les versements au-delà du plafond sont refusés. Livret A et LDDS : 1,7 %, LEP : 2,5 % depuis le 1er août 2026.</p>
 `;
 }
 function simSheet(){sheet("Simulateur",simHtml(),async()=>false,()=>updateSim())}
 function needMonthly(start,once,rate,cap,T,months){let lo=0,hi=T;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(simulate({start,monthly:mid,once,months,rate,cap:0}).final>=T)hi=mid;else lo=mid}return Math.ceil(hi-1e-6)}
+function simActions(a,start,T,months){const box=$("#simActions");if(!box||readOnly){if(box)box.innerHTML="";return}
+  const m=Math.round(num(sim.monthly)*100)/100;let h="";
+  if(a){h+=num(a.monthly)!==m?`<div class="simact"><div><b>Appliquer ce versement</b><div class="note">${esc(a.name)} : ${e0(num(a.monthly))}/mois aujourd'hui → ${e0(m)}/mois. Ton solde prévu et tes prévisions seront recalculés avec ce montant.</div></div><button type="button" class="btn small primary" data-act="simapply">Appliquer</button></div>`:`<p class="note" style="margin:0">${e0(m)}/mois, c'est déjà le versement programmé sur ${esc(a.name)}.</p>`}
+  else h+=`<div class="simact"><div><b>Ouvrir ce placement</b><div class="note">Crée le compte d'épargne avec ${e0(m)}/mois à ${num(sim.rate).toLocaleString("fr-FR")} %.</div></div><button type="button" class="btn small primary" data-act="simopen">Créer</button></div>`;
+  if(T)h+=`<div class="simact col"><div><b>En faire un projet</b><div class="note">${e0(T)} pour ${monthName(addM(CUR,months))}${a?`, sur ${esc(a.name)}`:""}. Il apparaîtra dans « Ce qu'il faut mettre de côté ».</div></div><div class="simproj"><input id="simProjName" maxlength="60" placeholder="Nom du projet (ex. Voiture)" aria-label="Nom du projet"><button type="button" class="btn small primary" data-act="simproj">Créer le projet</button></div></div>`;
+  box.innerHTML=h}
 function updateSim(){
   const out=$("#simOut"); if(!out)return;
   const a=S.accounts.find(x=>x.id===sim.acc), start=a?accEst(a):0, cap=a?num(a.cap):0;
@@ -853,6 +865,7 @@ function updateSim(){
   out.innerHTML=`${note}<div class="stats"><div class="stat"><div class="k">Dans ${months} mois</div><div class="v">${e0(r.final)}</div><div class="s">${monthName(addM(CUR,months))}</div></div><div class="stat"><div class="k">Dont versé par toi</div><div class="v">${e0(r.paid)}</div><div class="s">solde actuel inclus</div></div><div class="stat"><div class="k">Intérêts</div><div class="v">${e0(r.interest)}</div><div class="s">à ${num(sim.rate).toLocaleString("fr-FR")} %/an</div></div></div>
   ${r.capHit!==null?`<div class="banner" style="background:var(--warn-soft)">Plafond atteint ${r.capHit===0?"dès maintenant":"au mois "+r.capHit}. ${e0(r.refused)} ne pourront pas être versés sur ce compte.</div>`:""}
   ${lineChart([{pts:r.pts,col:"var(--accent)"}],months,"Évolution du solde")}`;
+  simActions(a,start,T,months);
 }
 function lineChart(series,months,label,yearsLabels){
   const W=420,H=200,P={l:54,r:8,t:12,b:24};
@@ -1014,8 +1027,8 @@ function recMonthSheet(r){
     await put("recurring",r.id,{...strip(r),overrides:o});toast("Enregistré pour "+monthName(k,true))},
   f=>{f.querySelector("#ovReset")?.addEventListener("click",async()=>{const o={...(r.overrides||{})};delete o[k];await put("recurring",r.id,{...strip(r),overrides:o});closeSheet();toast("Rétabli")})});
 }
-function accSheet(a){
-  const isNew=!a; a=a||{name:"",role:"securite",balance:"",rate:1.7,cap:22950,monthly:0};
+function accSheet(a,pre){
+  const isNew=!a; a=a||{name:"",role:"securite",balance:"",rate:1.7,cap:22950,monthly:0,...(pre||{})};
   sheet(isNew?"Nouveau compte d'épargne":a.name,`
     <div class="field"><label for="aName">Nom</label><input id="aName" name="name" value="${esc(a.name)}" required maxlength="60" placeholder="ex. Livret A"></div>
     <div class="grid2"><div class="field"><label for="aBal">Solde actuel (€)</label><input id="aBal" name="balance" inputmode="decimal" value="${esc(has(a.balance)?accEst(a):"")}"><span class="hint">Mets le solde réel lu sur ton appli bancaire.</span></div>
@@ -1275,6 +1288,11 @@ document.addEventListener("click",e=>{
   else if(k==="settings")settingsSheet();
   else if(k==="export")exportJson();
   else if(k==="sim")simSheet();
+  else if(k==="simapply"){const a=S.accounts.find(x=>x.id===sim.acc);if(a){const m=Math.round(num(sim.monthly)*100)/100;put("accounts",a.id,{...strip(a),monthly:m}).then(()=>{toast(`${a.name} : ${e0(m)}/mois`);updateSim()}).catch(x=>toast(x.message))}}
+  else if(k==="simopen"){const pre={monthly:Math.round(num(sim.monthly)*100)/100,rate:num(sim.rate),cap:null,balance:has(sim.once)&&num(sim.once)>0?num(sim.once):""};closeSheet();accSheet(null,pre)}
+  else if(k==="simproj"){const n=($("#simProjName")?.value||"").trim();if(!n){toast("Donne un nom au projet");$("#simProjName")?.focus();return}
+    const a=S.accounts.find(x=>x.id===sim.acc),T=num(sim.target),mo=Math.max(1,Math.round(num(sim.months)));
+    put("projects",uid(),{name:n,target:T,deadline:addM(CUR,mo),saved:a?Math.round(accEst(a)):0,account:a?a.id:null}).then(()=>{toast(`Projet « ${n} » créé`);const i=$("#simProjName");if(i)i.value=""}).catch(x=>toast(x.message))}
   else if(k==="cover"){if(readOnly)toast("Lecture seule");else{const [bk,amt]=id.split("|");coverSheet(bk,num(amt))}}
   else if(k==="accmonth"){const x=S.accounts.find(y=>y.id===id);x&&accMonthSheet(x)}
   else if(k==="fsort"){fixSort=id;render()}
