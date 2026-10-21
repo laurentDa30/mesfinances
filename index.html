@@ -123,6 +123,15 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .envrow{display:grid;grid-template-columns:1fr 110px 38px;gap:8px;align-items:center}
 .envrow input{border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:10px 12px;width:100%;min-width:0;font-size:16px}
 .envrow .hint{grid-column:1/-1;margin-top:-4px}
+.daychip{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-family:var(--f-num);font-size:13px;font-weight:600}
+.daychip.none{background:var(--sunk);color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.weeks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.weeks>div{background:var(--sunk);border-radius:var(--r-s);padding:8px}
+.wk-out{font-weight:600} .wk-in{color:var(--good);font-size:13px}
+@media (max-width:400px){.weeks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .groups{display:flex;flex-direction:column;gap:8px}
 .grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;font-weight:600}
@@ -599,7 +608,7 @@ function forecastChart(){
     s+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle">${monthName(ks[i],true)}</text>`});
   return s+"</svg>";
 }
-function niceTicks(mn,mx,n){const span=mx-mn,step0=span/n,mag=Math.pow(10,Math.floor(Math.log10(step0))),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=step0)||step0;const out=[];for(let t=Math.ceil(mn/st)*st;t<=mx+1e-9;t+=st)out.push(Math.round(t*100)/100);if(!out.includes(0)&&mn<=0&&mx>=0)out.push(0);return out}
+function niceTicks(mn,mx,n){const span=mx-mn,step0=span/n,mag=Math.pow(10,Math.floor(Math.log10(step0))),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=step0)||step0;const out=[];for(let t=Math.ceil(mn/st)*st;t<=mx+1e-9;t+=st)out.push((Math.round(t*100)/100)||0);if(!out.includes(0)&&mn<=0&&mx>=0)out.push(0);return out}
 function opsList(c){
   const k=viewMonth;
   const rec=S.recurring.map(r=>({r,a:recAmount(r,k)})).filter(x=>x.a||(x.r.overrides&&x.r.overrides[k]&&x.r.overrides[k].skip));
@@ -624,6 +633,50 @@ function opsList(c){
   </div>`;
 }
 
+/* ---------- Calendrier des prélèvements ---------- */
+let fixSort="amount", calBank="all";
+function dayChip(d){return has(d)?`<span class="daychip" title="Le ${num(d)} du mois">${num(d)}</span>`:`<span class="daychip none" title="Jour non renseigné">?</span>`}
+function fsorted(L){return fixSort==="day"?[...L].sort((a,b)=>(has(a.day)?num(a.day):99)-(has(b.day)?num(b.day):99)||monthlyEq(b)-monthlyEq(a)):L}
+function dayItems(k,B){const {y,m}=pm(k),dim=new Date(y,m,0).getDate(),L=[],dd=x=>has(x)?Math.min(dim,Math.max(1,num(x))):null;
+  S.recurring.forEach(r=>{const a=recAmount(r,k);if(!a)return;
+    if(r.kind==="transfer"){if(!B)return;if(bankOf(r)===B)L.push({t:"out",l:r.label+" → "+bankName(toOf(r)),a,d:dd(r.day)});if(toOf(r)===B)L.push({t:"in",l:r.label+" ← "+bankName(bankOf(r)),a,d:dd(r.day)});return}
+    if(B&&bankOf(r)!==B)return;L.push({t:r.kind==="in"?"in":"out",l:r.label,a,d:dd(r.day)})});
+  S.accounts.forEach(a=>{const v=num(a.monthly);if(!v||(B&&bankOf(a)!==B))return;L.push({t:"save",l:"Virement vers "+a.name,a:v,d:dd(a.day)})});
+  return {L,dim}}
+function calSection(){
+  const k=CUR,B=calBank==="all"?null:calBank,{L,dim}=dayItems(k,B);
+  if(!L.length)return "";
+  const days=[...Array(dim)].map((_,i)=>({d:i+1,inn:0,out:0,save:0,items:[]}));
+  L.filter(x=>x.d).forEach(x=>{const D=days[x.d-1];D.items.push(x);if(x.t==="in")D.inn+=x.a;else if(x.t==="save")D.save+=x.a;else D.out+=x.a});
+  let run=0,low={v:0,d:null};const cum=days.map(D=>{run+=D.inn-D.out-D.save;if(run<low.v)low={v:run,d:D.d};return run});
+  const undated=L.filter(x=>!x.d);
+  const W=420,H=230,P={l:60,r:8,t:14,b:22},bw=(W-P.l-P.r)/dim;
+  const maxUp=Math.max(...days.map(D=>D.inn),...cum,0), maxDn=Math.max(...days.map(D=>D.out+D.save),...cum.map(v=>-v),0)||1;
+  const top=maxUp*1.1, bot=-maxDn*1.1, y=v=>P.t+(top-v)/(top-bot)*(H-P.t-P.b), x=d=>P.l+(d-1)*bw;
+  let g=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Répartition des prélèvements sur le mois">`;
+  niceTicks(bot,top,4).forEach(t=>{g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t?'stroke-dasharray="2 4"':'stroke-width="1.5"'}/><text x="${P.l-6}" y="${y(t)+4}" text-anchor="end">${e0(t)}</text>`});
+  const tday=today.getDate();
+  g+=`<rect x="${x(tday)}" y="${P.t}" width="${bw}" height="${H-P.t-P.b}" fill="var(--accent)" opacity=".08"/>`;
+  days.forEach(D=>{const bx=x(D.d)+bw*0.15,w=bw*0.7,tip=D.items.map(i=>`${i.t==="in"?"+":"−"}${e2(i.a)} ${i.l}`).join("\n");
+    if(D.inn)g+=`<rect x="${bx}" y="${y(D.inn)}" width="${w}" height="${y(0)-y(D.inn)}" rx="2" fill="var(--good)"><title>Le ${D.d} :\n${esc(tip)}</title></rect>`;
+    if(D.out)g+=`<rect x="${bx}" y="${y(0)}" width="${w}" height="${y(-D.out)-y(0)}" rx="2" fill="var(--ink)" opacity=".75"><title>Le ${D.d} :\n${esc(tip)}</title></rect>`;
+    if(D.save)g+=`<rect x="${bx}" y="${y(-D.out)}" width="${w}" height="${y(-D.out-D.save)-y(-D.out)}" rx="2" fill="var(--accent)"><title>Le ${D.d} :\n${esc(tip)}</title></rect>`});
+  g+=`<path d="${cum.map((v,i)=>`${i?"L":"M"}${(x(i+1)+bw/2).toFixed(1)},${y(v).toFixed(1)}`).join("")}" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/>`;
+  if(low.d)g+=`<circle cx="${x(low.d)+bw/2}" cy="${y(low.v)}" r="4" fill="var(--warn)"/>`;
+  [1,5,10,15,20,25,dim].forEach(d=>{g+=`<text x="${x(d)+bw/2}" y="${H-6}" text-anchor="middle">${d}</text>`});
+  g+="</svg>";
+  const parts=[[1,7],[8,14],[15,21],[22,dim]].map(([a,b])=>{const ds=days.slice(a-1,b);return {a,b,inn:sum(ds,D=>D.inn),out:sum(ds,D=>D.out+D.save)}});
+  const sal=L.filter(x=>x.t==="in"&&x.d).sort((a,b)=>b.a-a.a)[0];
+  return `<section class="sec"><div class="sechead"><h2>Calendrier des prélèvements</h2><span class="note">${monthName(k)}</span></div>
+  ${multi()?`<div class="chips" role="group" aria-label="Compte"><button class="chip" data-act="calb:all" aria-pressed="${calBank==="all"}">Tous les comptes</button>${S.banks.map(b=>`<button class="chip" data-act="calb:${b.id}" aria-pressed="${calBank===b.id}">${esc(b.name)}</button>`).join("")}</div>`:""}
+  <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    ${g}
+    <div class="legend"><div><i style="background:var(--good)"></i>Entrées</div><div><i class="c-fix"></i>Prélèvements</div><div><i class="c-save"></i>Épargne</div><div><i style="background:var(--warn);height:3px;border-radius:2px"></i>Cumul du mois</div></div>
+    ${low.d?`<div class="banner" style="background:var(--warn-soft)">Point bas le <b>${low.d}</b> : <b>${e0(low.v)}</b> par rapport au début du mois${sal&&sal.d>low.d?`, avant l'arrivée de « ${esc(sal.l)} » le ${sal.d}`:""}. ${B||!multi()?"Ce compte":"Tes comptes"} doi${B||!multi()?"t":"vent"} avoir au moins cette somme en début de mois pour passer sans découvert.</div>`:""}
+    <div class="weeks">${parts.map(q=>`<div><div class="note">Du ${q.a} au ${q.b}</div><div class="num wk-out">${q.out?"−"+e0(q.out):"0 €"}</div>${q.inn?`<div class="num wk-in">+${e0(q.inn)}</div>`:""}</div>`).join("")}</div>
+    ${undated.length?`<p class="note" style="margin:0">${undated.length} ligne${undated.length>1?"s":""} sans jour (${e0(sum(undated,x=>x.a))}) ne figure${undated.length>1?"nt":""} pas dans le graphique : ${undated.slice(0,4).map(x=>esc(x.l)).join(", ")}${undated.length>4?"…":""}. Indique leur jour pour les placer.</p>`:""}
+  </div></section>`;
+}
 function viewFixes(){
   const ins=S.recurring.filter(r=>r.kind==="in"), outs=S.recurring.filter(r=>isOut(r)), trs=S.recurring.filter(r=>r.kind==="transfer");
   const bankSum=id=>{const inB=x=>bankOf(x)===id, act=S.recurring.filter(activeNow);
@@ -637,7 +690,7 @@ function viewFixes(){
   const credits=sum(outs.filter(r=>r.cat==="Crédits"&&activeNow(r)),monthlyEq);
   const debt=cap.inc>0?credits/cap.inc:0;
   const row=r=>{const p=FREQ[r.freq]||1;const inc=incomplete().find(x=>x.r===r);
-    return `<button class="row" data-act="rec:${r.id}"><div class="main"><div>${esc(r.label)}</div><div class="sub"><span>${r.kind==="transfer"?"Virement":esc(r.cat||"Sans catégorie")}</span>${multi()?`<span class="tag">${r.kind==="transfer"?esc(bankName(bankOf(r)))+" → "+esc(bankName(toOf(r))):esc(bankName(bankOf(r)))}</span>`:""}<span class="tag">${FREQ_LBL[r.freq]||"Mensuel"}</span>${isOut(r)&&r.essential===false?'<span class="tag">Non essentiel</span>':""}${r.end?`<span class="tag">jusqu'à ${monthName(r.end,true)} ${pm(r.end).y}</span>`:""}${inc?`<span class="tag warn">À compléter : ${inc.miss.join(", ")}</span>`:""}</div></div><div style="text-align:right"><div class="amt ${r.kind==="in"?"pos":r.kind==="transfer"?"sav":"neg"}">${has(r.amount)?e2(num(r.amount)):"—"}</div>${p>1&&has(r.amount)?`<div class="note num">${e2(monthlyEq(r))}/mois</div>`:""}</div></button>`};
+    return `<button class="row" data-act="rec:${r.id}">${dayChip(r.day)}<div class="main"><div>${esc(r.label)}</div><div class="sub"><span>${r.kind==="transfer"?"Virement":esc(r.cat||"Sans catégorie")}</span>${multi()?`<span class="tag">${r.kind==="transfer"?esc(bankName(bankOf(r)))+" → "+esc(bankName(toOf(r))):esc(bankName(bankOf(r)))}</span>`:""}<span class="tag">${FREQ_LBL[r.freq]||"Mensuel"}</span>${isOut(r)&&r.essential===false?'<span class="tag">Non essentiel</span>':""}${r.end?`<span class="tag">jusqu'à ${monthName(r.end,true)} ${pm(r.end).y}</span>`:""}${inc?`<span class="tag warn">À compléter : ${inc.miss.join(", ")}</span>`:""}</div></div><div style="text-align:right"><div class="amt ${r.kind==="in"?"pos":r.kind==="transfer"?"sav":"neg"}">${has(r.amount)?e2(num(r.amount)):"—"}</div>${p>1&&has(r.amount)?`<div class="note num">${e2(monthlyEq(r))}/mois</div>`:""}</div></button>`};
   const byCat={}; outs.filter(activeNow).forEach(r=>{byCat[r.cat||"Sans catégorie"]=(byCat[r.cat||"Sans catégorie"]||0)+monthlyEq(r)});
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   const mxc=cats.length?cats[0][1]:1;
@@ -647,6 +700,7 @@ function viewFixes(){
     <div class="stat"><div class="k">Reste après charges</div><div class="v">${e0(cap.inc-cap.out)}</div><div class="s">avant vie courante et épargne</div></div>
     <div class="stat"><div class="k">Taux d'endettement</div><div class="v">${pct(debt)}</div><div class="s">${debt>0.35?'<span style="color:var(--bad)">au-dessus du repère de 35 %</span>':"repère bancaire : 35 % max"}</div></div>
   </section>
+  ${calSection()}
   <section class="sec"><div class="sechead"><h2>Comptes bancaires</h2>${readOnly?"":`<button class="btn small" data-act="addbank">Ajouter</button>`}</div>
   ${transferPairs().map(({i,o})=>`<div class="alert warn"><span class="stripe"></span><div><b>Virement compté deux fois ?</b><p>« ${esc(i.label)} » et « ${esc(o.label)} » : même montant, deux comptes. Fusionne-les si c'est le même argent.</p></div>${readOnly?"":`<button class="btn small" data-act="merge:${o.id}|${i.id}">Fusionner</button>`}</div>`).join("")}
   ${S.banks.length?`<div class="list">${bankRows}</div><p class="note" style="margin:0">Solde mensuel de chaque compte : ce qui y arrive moins ce qui en part. Un compte négatif doit être alimenté par un virement.</p>`:`<p class="note" style="margin:0">Tout est compté sur un seul compte. Ajoute tes comptes (ex. compte joint, banque en ligne) pour choisir d'où part chaque prélèvement et voir le solde de chacun.</p>`}</section>
@@ -654,9 +708,10 @@ function viewFixes(){
   <div class="card" style="display:flex;flex-direction:column;gap:8px">${cats.map(([k,v])=>`<div style="display:grid;grid-template-columns:minmax(0,150px) 1fr auto;gap:10px;align-items:center;font-size:14px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k)}</span><span class="capbar"><span style="width:${(v/mxc*100).toFixed(1)}%;background:var(--ink);opacity:.7"></span></span><span class="num">${e0(v)}</span></div>`).join("")||'<span class="muted">Aucune charge</span>'}</div></section>
   <section class="sec"><div class="sechead"><h2>Entrées et sorties récurrentes</h2>${readOnly?"":`<button class="btn primary small" data-act="addrec">Ajouter</button>`}</div>
   <p class="note" style="margin:-4px 0 0">Elles sont comptées automatiquement chaque mois. Pour une charge trimestrielle ou annuelle, indique un mois où elle tombe : elle sera placée au bon mois.</p>
-  <div class="list"><div class="grouplbl"><span>Entrées</span><span class="num">${e0(cap.inc)}/mois</span></div>${ins.map(row).join("")||'<div class="row muted" style="cursor:default">Aucune</div>'}
-  <div class="grouplbl"><span>Sorties</span><span class="num">${e0(cap.out)}/mois</span></div>${outs.map(row).join("")||'<div class="row muted" style="cursor:default">Aucune</div>'}
-  ${trs.length?`<div class="grouplbl"><span>Virements entre comptes</span><span class="num">${e0(sum(trs.filter(activeNow),monthlyEq))}/mois</span></div>${trs.map(row).join("")}`:""}</div></section>`;
+  <div class="chips" role="group" aria-label="Trier"><span class="note">Trier par</span><button class="chip" data-act="fsort:amount" aria-pressed="${fixSort==="amount"}">Montant</button><button class="chip" data-act="fsort:day" aria-pressed="${fixSort==="day"}">Jour du mois</button></div>
+  <div class="list"><div class="grouplbl"><span>Entrées</span><span class="num">${e0(cap.inc)}/mois</span></div>${fsorted(ins).map(row).join("")||'<div class="row muted" style="cursor:default">Aucune</div>'}
+  <div class="grouplbl"><span>Sorties</span><span class="num">${e0(cap.out)}/mois</span></div>${fsorted(outs).map(row).join("")||'<div class="row muted" style="cursor:default">Aucune</div>'}
+  ${trs.length?`<div class="grouplbl"><span>Virements entre comptes</span><span class="num">${e0(sum(trs.filter(activeNow),monthlyEq))}/mois</span></div>${fsorted(trs).map(row).join("")}`:""}</div></section>`;
 }
 
 function viewEpargne(){
@@ -1139,6 +1194,8 @@ document.addEventListener("click",e=>{
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
   else if(k==="export")exportJson();
+  else if(k==="fsort"){fixSort=id;render()}
+  else if(k==="calb"){calBank=id;render()}
   else if(k==="budget"){if(readOnly)toast("Lecture seule");else budgetSheet()}
   else if(k==="migrate"){const d=api.migrate;api.migrate=null;if(d){S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};importAll(d).then(()=>toast("Données envoyées vers ton compte"))}}
   else if(k==="start"){if(readOnly)toast("Lecture seule");else startSheet()}
