@@ -1113,12 +1113,12 @@ async function boot(){
         mode="api";api.online=pr!=="offline";if(pr==="error")api.error="configuration du serveur incomplète (voir le README)";
         render();
         sync();
-        try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch{}
         return}}
     if(saved&&Array.isArray(saved.recurring)){S={...S,...saved,config:{...DEFAULT_CFG,...(saved.config||{})}};mode="local"}
     else if(inClaude){S=demoData();mode="demo"}
     else mode="local";
-    try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch{}
+    // Mode appareil seul : demander une seule fois que le navigateur ne supprime pas les données
+    try{if(mode==="local"&&navigator.storage&&navigator.storage.persisted&&!localStorage.getItem("comptes-foyer-persist-asked")){navigator.storage.persisted().then(ok=>{if(!ok){localStorage.setItem("comptes-foyer-persist-asked","1");navigator.storage.persist()}}).catch(()=>{})}}catch{}
     render();return;
   }
   db=c;
