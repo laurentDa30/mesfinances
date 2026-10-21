@@ -191,6 +191,7 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .field label{font-size:13px;font-weight:600;color:var(--muted)}
 .field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:10px 12px;width:100%;min-width:0;font-size:16px}
 html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+.field input[readonly]{background:var(--sunk);color:var(--muted)}
 .field input.bigin{font-family:var(--f-display);font-size:28px;font-weight:700;padding:8px 12px}
 .field .hint{font-size:12.5px;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -814,7 +815,7 @@ function simHtml(){
       <div class="field"><label for="simRate">Taux annuel (%)</label><input id="simRate" inputmode="decimal" value="${esc(sim.rate??"")}"></div>
       <div class="field"><label for="simMonthly">Versement mensuel (€)</label><input id="simMonthly" inputmode="decimal" value="${esc(sim.monthly)}"></div>
       <div class="field"><label for="simOnce">Versement unique aujourd'hui (€)</label><input id="simOnce" inputmode="decimal" value="${esc(sim.once)}"></div>
-      <div class="field"><label for="simMonths">Durée (mois)</label><input id="simMonths" inputmode="numeric" value="${esc(sim.months)}"></div>
+      <div class="field"><label for="simMonths">Durée (mois)</label><input id="simMonths" inputmode="numeric" value="${esc(sim.months)}"><span class="hint" id="simMonthsHint"></span></div>
       <div class="field"><label for="simTarget">Montant visé (facultatif)</label><input id="simTarget" inputmode="decimal" value="${esc(sim.target)}" placeholder="ex. 5000"></div>
     </div>
     <div id="simOut"></div>
@@ -822,19 +823,29 @@ function simHtml(){
 `;
 }
 function simSheet(){sheet("Simulateur",simHtml(),async()=>false,()=>updateSim())}
+function needMonthly(start,once,rate,cap,T,months){let lo=0,hi=T;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(simulate({start,monthly:mid,once,months,rate,cap:0}).final>=T)hi=mid;else lo=mid}return Math.ceil(hi)}
 function updateSim(){
   const out=$("#simOut"); if(!out)return;
-  const a=S.accounts.find(x=>x.id===sim.acc);
+  const a=S.accounts.find(x=>x.id===sim.acc), start=a?accEst(a):0, cap=a?num(a.cap):0;
   if(sim.rate===undefined||sim.rate===null)sim.rate=a&&has(a.rate)?num(a.rate):1.7;
-  const months=Math.max(1,Math.min(600,Math.round(num(sim.months))));
-  const r=simulate({start:a?accEst(a):0,monthly:sim.monthly,once:sim.once,months,rate:sim.rate,cap:a?num(a.cap):0});
-  let rev="";
-  if(has(sim.target)&&num(sim.target)>0){
-    let lo=0,hi=num(sim.target);for(let i=0;i<40;i++){const mid=(lo+hi)/2;const t=simulate({start:a?accEst(a):0,monthly:mid,once:sim.once,months,rate:sim.rate,cap:0}).final;if(t>=num(sim.target))hi=mid;else lo=mid}
-    rev=`<div class="banner">Pour atteindre ${e0(num(sim.target))} en ${months} mois : <b>${e0(Math.ceil(hi))}/mois</b>${a&&num(a.cap)&&num(sim.target)>num(a.cap)?` (au-delà du plafond de ${e0(num(a.cap))} : il faudra un second compte)`:""}.</div>`;
+  const T=has(sim.target)&&num(sim.target)>0?num(sim.target):0;
+  let note="",auto=false;
+  if(T){
+    if(cap&&T>cap)note=`<div class="banner" style="background:var(--warn-soft)">${esc(a.name)} est plafonné à ${e0(cap)} : ${e0(T)} ne peut pas y être atteint. Choisis « Nouveau placement » ou un autre compte.</div>`;
+    else{const big=simulate({start,monthly:sim.monthly,once:sim.once,months:600,rate:sim.rate,cap});const n=big.pts.findIndex(v=>v>=T-0.005);
+      if(n===0)note=`<div class="banner" style="background:var(--good-soft)">Objectif de ${e0(T)} déjà atteint avec le solde actuel (${e0(start+num(sim.once))}).</div>`;
+      else if(n>0){auto=true;sim.months=n;const y=Math.floor(n/12),m=n%12;
+        const faster=[12,24,36].filter(x=>x<n).map(x=>`en ${x} mois : <b>${e0(needMonthly(start,sim.once,sim.rate,cap,T,x))}/mois</b>`);
+        note=`<div class="banner" style="background:var(--good-soft)">Objectif de ${e0(T)} atteint en <b>${n} mois</b>${y?` (${y} an${y>1?"s":""}${m?` et ${m} mois`:""})`:""}, soit en ${monthName(addM(CUR,n))}.${faster.length?`<br>Plus vite ? ${faster.join(" · ")}`:""}</div>`}
+      else note=`<div class="banner" style="background:var(--warn-soft)">Avec ces versements, ${e0(T)} n'est pas atteint en 50 ans. Augmente le versement mensuel.</div>`}
   }
-  out.innerHTML=`<div class="stats"><div class="stat"><div class="k">Dans ${months} mois</div><div class="v">${e0(r.final)}</div><div class="s">${monthName(addM(CUR,months))}</div></div><div class="stat"><div class="k">Dont versé par toi</div><div class="v">${e0(r.paid)}</div><div class="s">solde actuel inclus</div></div><div class="stat"><div class="k">Intérêts</div><div class="v">${e0(r.interest)}</div><div class="s">à ${num(sim.rate).toLocaleString("fr-FR")} %/an</div></div></div>
-  ${r.capHit!==null?`<div class="banner" style="background:var(--warn-soft)">Plafond atteint ${r.capHit===0?"dès maintenant":"au mois "+r.capHit}. ${e0(r.refused)} ne pourront pas être versés sur ce compte.</div>`:""}${rev}
+  const mIn=$("#simMonths"),mH=$("#simMonthsHint");
+  if(mIn){mIn.readOnly=auto;if(auto&&document.activeElement!==mIn)mIn.value=sim.months}
+  if(mH)mH.textContent=auto?"Calculée à partir du montant visé. Vide le montant visé pour la choisir.":"";
+  const months=Math.max(1,Math.min(600,Math.round(num(sim.months))));
+  const r=simulate({start,monthly:sim.monthly,once:sim.once,months,rate:sim.rate,cap});
+  out.innerHTML=`${note}<div class="stats"><div class="stat"><div class="k">Dans ${months} mois</div><div class="v">${e0(r.final)}</div><div class="s">${monthName(addM(CUR,months))}</div></div><div class="stat"><div class="k">Dont versé par toi</div><div class="v">${e0(r.paid)}</div><div class="s">solde actuel inclus</div></div><div class="stat"><div class="k">Intérêts</div><div class="v">${e0(r.interest)}</div><div class="s">à ${num(sim.rate).toLocaleString("fr-FR")} %/an</div></div></div>
+  ${r.capHit!==null?`<div class="banner" style="background:var(--warn-soft)">Plafond atteint ${r.capHit===0?"dès maintenant":"au mois "+r.capHit}. ${e0(r.refused)} ne pourront pas être versés sur ce compte.</div>`:""}
   ${lineChart([{pts:r.pts,col:"var(--accent)"}],months,"Évolution du solde")}`;
 }
 function lineChart(series,months,label,yearsLabels){
