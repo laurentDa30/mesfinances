@@ -1,9 +1,10 @@
-import { verify, noStore } from "../lib/auth.js";
+import { requireUser, noStore } from "../lib/auth.js";
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   noStore(res);
   try {
-    return verify(req) ? res.status(200).json({ ok: true }) : res.status(401).json({ error: "unauthorized" });
+    const u = await requireUser(req, res); if (!u) return;
+    return res.status(200).json({ ok: true, email: u.email });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

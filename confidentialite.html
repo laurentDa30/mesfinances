@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Confidentialité — Comptes du foyer</title>
+<style>
+:root{--bg:#EEF1F5;--surface:#fff;--ink:#141C28;--muted:#5A6576;--line:#D6DCE4;--accent:#2C46B1}
+@media (prefers-color-scheme:dark){:root{--bg:#0E131A;--surface:#161D27;--ink:#E6EBF2;--muted:#97A3B4;--line:#283242;--accent:#93A6FF;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left)) 48px}
+h1{font-size:26px;line-height:1.2}h2{font-size:18px;margin-top:28px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.note{color:var(--muted);font-size:14px}a{color:var(--accent)}
+</style>
+</head>
+<body><main>
+<p><a href="/">← Retour à l'app</a></p>
+<h1>Politique de confidentialité</h1>
+<p class="note">Dernière mise à jour : [DATE] · Version de travail, à faire relire avant toute diffusion publique.</p>
+
+<div class="card"><b>En bref.</b> Tes données financières sont chiffrées sur ton appareil avant d'être envoyées. Nous ne pouvons pas les lire. Nous ne les vendons pas, ne les partageons pas et ne les utilisons à aucune fin commerciale. Il n'y a ni publicité ni traceur dans l'application.</div>
+
+<h2>Qui est responsable</h2>
+<p>[NOM ou RAISON SOCIALE], [ADRESSE], contact : [E-MAIL DE CONTACT].</p>
+
+<h2>Ce que nous stockons</h2>
+<ul>
+<li><b>Ton adresse e-mail</b>, pour identifier ton compte.</li>
+<li><b>Une empreinte de ton mot de passe</b> : ton mot de passe ne quitte jamais ton appareil ; le serveur reçoit seulement une valeur dérivée, qu'il hache à nouveau.</li>
+<li><b>Tes données budgétaires, chiffrées</b> (comptes, charges, opérations, épargne…). Elles sont chiffrées dans ton navigateur (AES-256) avec une clé que seuls ton mot de passe et ta clé de secours permettent d'ouvrir. Le serveur ne voit que des données illisibles.</li>
+<li><b>Des compteurs techniques</b> limitant les tentatives de connexion (adresse IP ou e-mail, conservés au plus quelques heures).</li>
+</ul>
+
+<h2>Ce que nous ne faisons pas</h2>
+<ul>
+<li>Aucune revente, aucun partage, aucune exploitation commerciale de tes données.</li>
+<li>Aucune publicité, aucun outil de mesure d'audience, aucun traceur tiers.</li>
+<li>Aucun accès à tes comptes bancaires : tu saisis ou importes toi-même tes informations.</li>
+</ul>
+
+<h2>Cookies</h2>
+<p>Un seul cookie, strictement nécessaire : il maintient ta session ouverte (6 mois au plus). Aucun consentement n'est requis pour ce type de cookie.</p>
+
+<h2>Hébergement et sous-traitants</h2>
+<ul>
+<li><b>Vercel Inc.</b> (hébergement de l'application, fonctions exécutées à Francfort).</li>
+<li><b>Neon</b> (base de données, région Francfort).</li>
+</ul>
+<p>Ces prestataires sont des sociétés américaines ; ils n'ont accès qu'à des données chiffrées et à ton adresse e-mail. [Préciser les garanties : accords de traitement des données / clauses contractuelles types.]</p>
+
+<h2>Durée de conservation</h2>
+<p>Tes données sont conservées tant que ton compte existe. Tu peux le supprimer à tout moment depuis l'application (Réglages → Mon compte) : toutes tes données sont alors effacées du serveur.</p>
+
+<h2>Tes droits</h2>
+<p>Tu peux exporter tes données (Réglages → Sauvegarde), les corriger directement dans l'application et supprimer ton compte. Pour toute autre demande (accès, opposition…) : [E-MAIL DE CONTACT]. Tu peux aussi saisir la CNIL (cnil.fr).</p>
+
+<h2>Mot de passe oublié</h2>
+<p>Comme tes données sont chiffrées avec ton mot de passe, nous ne pouvons pas le réinitialiser à ta place. Ta <b>clé de secours</b>, remise à l'inscription, permet d'en choisir un nouveau. Sans elle, les données ne peuvent pas être récupérées.</p>
+
+<h2>Information, pas conseil</h2>
+<p>Les calculs et repères affichés sont des estimations à titre informatif et ne constituent pas un conseil financier ou en investissement personnalisé.</p>
+</main></body></html>

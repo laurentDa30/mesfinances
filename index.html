@@ -130,6 +130,11 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .simact.col{flex-direction:column;align-items:stretch}
 .simproj{display:flex;gap:8px}
 .simproj input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:8px 10px;font-size:16px}
+.authcard{max-width:440px;margin:20px auto 0;width:100%;display:flex;flex-direction:column;gap:14px}
+.authform{display:flex;flex-direction:column;gap:10px}
+.authcard a{color:var(--accent)} .authcard .seg button{font-size:13.5px}
+.reckey{font-family:var(--f-num);font-size:19px;letter-spacing:.05em;background:var(--sunk);padding:14px;border-radius:var(--r-s);text-align:center;word-break:break-all;user-select:all;-webkit-user-select:all}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .calentry{display:flex;align-items:center;gap:12px}
 .calentry h2{font-size:16px;margin-bottom:2px}
 .daychip{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-family:var(--f-num);font-size:13px;font-weight:600}
@@ -543,10 +548,12 @@ function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===tab)));
   $("#modeLbl").textContent=mode==="db"?(readOnly?"Lecture seule":"Enregistré automatiquement"):mode==="api"?(api.error?"Erreur de synchronisation":api.queue.length?(api.online?"Synchronisation…":`Hors ligne · ${api.queue.length} en attente`):(api.online?"Synchronisé":"Hors ligne")):mode==="local"?"Enregistré sur cet appareil":mode==="demo"?"Données d'exemple":"Chargement…";
   if(mode==="loading")return;
-  if(mode==="login"){$("#main").innerHTML=loginView();$("#fabs")?.remove();return}
+  const authMode=["auth","unlock","recovery"].includes(mode);
+  document.querySelector("nav.tabs").hidden=authMode;$("#btnSettings").hidden=authMode;
+  if(authMode){$("#modeLbl").textContent="Budget chiffré de bout en bout";$("#main").innerHTML=authView();$("#fabs")?.remove();return}
   const m=$("#main");
   let html="";
-  if(mode==="api"&&api.migrate)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Ton compte en ligne est vide, mais cet appareil contient des données. Les envoyer vers ton compte ?</span><button class="btn small primary" data-act="migrate">Envoyer</button></div>`;
+  if(mode==="api"&&api.migrate)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Cet appareil contient des données de l'ancienne version, non chiffrées. Les importer dans ton compte ?</span><button class="btn small primary" data-act="migrate">Importer</button><button class="btn small" data-act="migrateskip">Ignorer</button></div>`;
   if(mode==="api"&&api.error)html+=`<div class="banner" style="background:var(--bad-soft)"><b>Le serveur ne répond pas correctement</b> : ${esc(api.error)}. Rien n'est enregistré en ligne pour l'instant ; tes modifications restent sur cet appareil et partiront dès que le problème sera réglé.</div>`;
   if(mode==="demo")html+=`<div class="banner"><b>Exemple.</b> Ces chiffres sont fictifs. Ouvre la page depuis Claude pour retrouver tes propres comptes.</div>`;
   if(mode==="local"&&(S.recurring.length||S.accounts.length)){const le=S.config.lastExport, age=le?Math.round((today-new Date(le+"T12:00"))/864e5):null;
@@ -561,7 +568,7 @@ function render(){
   if(tab==="epargne")updateSim();
   if(tab==="avenir")updateLong();
 }
-function emptyState(){return `<div class="card empty"><h2>Commence par ce qui revient chaque mois</h2><p>Ajoute ton salaire, ton loyer, tes abonnements et tes crédits. Ils seront comptés automatiquement chaque mois, et tu n'auras plus qu'à saisir les dépenses ponctuelles.</p><div class="actions" style="justify-content:center"><button class="btn primary" data-act="addrec">Ajouter un revenu ou une charge</button><button class="btn" data-act="addacc">Ajouter un livret</button></div>${mode==="local"||mode==="api"?`<p class="note">Tu as déjà une sauvegarde ?</p><label class="btn" for="impEmpty">Importer une sauvegarde</label><input type="file" id="impEmpty" accept="application/json,.json" hidden>`:""}</div>`}
+function emptyState(){return `<div class="card empty"><h2>Commence par ce qui revient chaque mois</h2><p>Ajoute ton salaire, ton loyer, tes abonnements et tes crédits. Ils seront comptés automatiquement chaque mois, et tu n'auras plus qu'à saisir les dépenses ponctuelles.</p><div class="actions" style="justify-content:center"><button class="btn primary" data-act="addrec">Ajouter un revenu ou une charge</button><button class="btn" data-act="addacc">Ajouter un livret</button></div>${mode==="api"?`<button class="btn" data-act="legacy">Récupérer l'ancienne version</button>`:""}${mode==="local"||mode==="api"?`<p class="note">Tu as déjà une sauvegarde ?</p><label class="btn" for="impEmpty">Importer une sauvegarde</label><input type="file" id="impEmpty" accept="application/json,.json" hidden>`:""}</div>`}
 
 function viewMois(){
   const c=compute(viewMonth), A=alerts(viewMonth);
@@ -1137,7 +1144,7 @@ function settingsSheet(){
       <div class="field"><label for="sEh">L'atteindre en (mois)</label><input id="sEh" name="emergencyHorizon" inputmode="numeric" value="${esc(c.emergencyHorizon??"")}"></div>
       <div class="field"><label for="sRate">Taux d'épargne visé (%)</label><input id="sRate" name="savingsTarget" inputmode="decimal" value="${esc(c.savingsTarget??"")}"></div>
     </div>
-    ${mode==="api"?`<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small danger" id="logoutBtn">Se déconnecter</button></div>`:""}
+    ${mode==="api"?`<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-act="account">Mon compte · ${esc(ACCT||"")}</button></div>`:""}
     <details ${mode==="local"?"open":""}><summary>Sauvegarde</summary><div class="actions" style="justify-content:flex-start;margin-top:10px"><button type="button" class="btn small" id="exp">Exporter (JSON)</button><label class="btn small" for="impF">Importer…</label><input type="file" id="impF" accept="application/json,.json" hidden></div><div class="note" id="impMsg"></div></details>
     <div class="actions"><button class="btn primary" ${readOnly?"disabled":""}>Enregistrer</button></div>`,
   async fd=>{const o={};["lifeBudget","cushion","age","retireAge","emergencyMonths","emergencyHorizon","savingsTarget"].forEach(k=>{const v=fd.get(k);o[k]=has(v)?num(v):null});
@@ -1146,10 +1153,15 @@ function settingsSheet(){
     await putConfig({...S.config,...o});longMonthly=null;toast("Réglages enregistrés")},
   f=>{
     f.querySelector("#exp").addEventListener("click",exportJson);
-    f.querySelector("#logoutBtn")?.addEventListener("click",doLogout);
     f.querySelector("#impF").addEventListener("change",e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=async()=>{const msg=f.querySelector("#impMsg");try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.recurring))throw new Error();msg.innerHTML=`Remplacer toutes tes données par ce fichier ? <button type="button" class="btn small danger" id="impGo">Remplacer</button>`;f.querySelector("#impGo").addEventListener("click",async()=>{await importAll(d);closeSheet();toast("Données importées")})}catch{msg.textContent="Ce fichier n'est pas une sauvegarde de l'application."}};r.readAsText(file)});
   });
 }
+async function saveText(filename,data,type){
+  let d=null;try{d=window.claude&&window.claude.use?await window.claude.use("downloads"):null}catch{d=null}
+  if(d){try{await d.save({filename,data});toast("Fichier prêt")}catch{toast("Enregistrement annulé")}return}
+  const blob=new Blob([data],{type});
+  try{const file=new File([blob],filename,{type});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});return}}catch(e){if(e&&e.name==="AbortError")return}
+  const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);toast("Fichier téléchargé")}
 function markExport(){putConfig({...S.config,lastExport:todayISO()}).catch(()=>{})}
 async function exportJson(){
   const data=JSON.stringify({version:1,exported:todayISO(),...S},null,2), filename=`comptes-${todayISO()}.json`;
@@ -1179,58 +1191,206 @@ async function putConfig(cfg){
   if(mode==="db"){await db.doc("config/main").set(JSON.parse(JSON.stringify(cfg)))}
   else{S.config=cfg;if(mode==="demo")mode="local";persist();if(mode==="api")enqueue({op:"put",coll:"config",id:"main",data:JSON.parse(JSON.stringify(cfg))});render()}
 }
-/* ---------- Synchronisation serveur (version Vercel + Neon) ---------- */
-const QKEY="comptes-foyer-queue", MKEY="comptes-foyer-mode";
+/* ---------- Comptes utilisateurs + chiffrement de bout en bout (version Vercel + Neon) ----------
+   Le mot de passe ne quitte jamais l'appareil : on en dérive (PBKDF2) une clé qui protège la « clé de données »,
+   et une empreinte d'authentification que le serveur re-hache. Chaque document est chiffré en AES-GCM avant l'envoi. */
+const CR=window.crypto&&window.crypto.subtle, TE=new TextEncoder(), TD=new TextDecoder();
+const KDF_PW=600000, KDF_REC=100000, VKEY="comptes-foyer-vault", MKEY="comptes-foyer-mode", PLAIN="comptes-foyer";
+let DK=null, ACCT=null, authTab="login", newRecovery=null;
+function b64e(buf){const u=new Uint8Array(buf);let s="";for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)}
+function b64d(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+async function pbkdf2(bytes,salt,iter){const k=await CR.importKey("raw",bytes,"PBKDF2",false,["deriveBits"]);return new Uint8Array(await CR.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:TE.encode(salt),iterations:iter},k,256))}
+async function deriveKeys(secret,email,iter){
+  const master=await pbkdf2(TE.encode(secret),"comptes-foyer:v1:"+email,iter);
+  const auth=b64e(await pbkdf2(master,"comptes-foyer:auth",1));
+  const wrap=await CR.importKey("raw",master,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+  return {auth,wrap}}
+async function seal(key,bytes){const iv=crypto.getRandomValues(new Uint8Array(12));return {v:1,iv:b64e(iv),ct:b64e(await CR.encrypt({name:"AES-GCM",iv},key,bytes))}}
+async function open_(key,box){return new Uint8Array(await CR.decrypt({name:"AES-GCM",iv:b64d(box.iv)},key,b64d(box.ct)))}
+const encDoc=async o=>seal(DK,TE.encode(JSON.stringify(o)));
+const decDoc=async b=>JSON.parse(TD.decode(await open_(DK,b)));
+const importDK=raw=>CR.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+function newRecoveryString(){const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=crypto.getRandomValues(new Uint8Array(24));let s="";r.forEach((x,i)=>{s+=A[x%A.length];if(i%4===3&&i<23)s+="-"});return s}
+const normRec=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/(.{4})(?=.)/g,"$1-");
+const normEmail=e=>String(e||"").trim().toLowerCase();
+/* petit stockage clé/valeur IndexedDB : la clé de données y est gardée non exportable */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("comptes-foyer",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function kv(op,k,v){const d=await idb();return new Promise((res,rej)=>{const s=d.transaction("kv",op==="get"?"readonly":"readwrite").objectStore("kv");const q=op==="get"?s.get(k):op==="del"?s.delete(k):s.put(v,k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function rememberKey(rawOrKey,email){DK=rawOrKey instanceof CryptoKey?rawOrKey:await importDK(rawOrKey);ACCT=email;try{await kv("put","dk",DK);await kv("put","email",email)}catch{}try{localStorage.setItem(MKEY,"api")}catch{}}
+async function wipeLocal(){DK=null;ACCT=null;api.queue=[];try{await kv("del","dk");await kv("del","email")}catch{}try{localStorage.removeItem(VKEY)}catch{}S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]}}
+/* cache local chiffré : état + modifications en attente */
+let persistT=null;
+function persistEnc(){if(!DK)return;clearTimeout(persistT);persistT=setTimeout(async()=>{try{localStorage.setItem(VKEY,JSON.stringify({email:ACCT,box:await seal(DK,TE.encode(JSON.stringify({S,queue:api.queue})))}))}catch{}},250)}
+async function loadVault(){try{const v=JSON.parse(localStorage.getItem(VKEY)||"null");if(!v||v.email!==ACCT)return false;const d=JSON.parse(TD.decode(await open_(DK,v.box)));
+  S={...S,...d.S,config:{...DEFAULT_CFG,...(d.S.config||{})}};COLLS.forEach(c=>S[c]=S[c]||[]);api.queue=d.queue||[];return true}catch{return false}}
+async function apiPost(action,payload){const r=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,...payload}),cache:"no-store"});const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||("Erreur "+r.status));e.status=r.status;throw e}return j}
+const netMsg=e=>e&&e.message==="Failed to fetch"?"Pas de connexion internet.":e&&e.message||"Erreur inconnue.";
+
+/* ---------- Synchronisation ---------- */
 const api={online:true,queue:[],busy:false,timer:null,migrate:null,error:null};
-function loadQueue(){try{api.queue=JSON.parse(localStorage.getItem(QKEY)||"[]")}catch{api.queue=[]}}
-function saveQueue(){try{localStorage.setItem(QKEY,JSON.stringify(api.queue))}catch{}}
+function loadQueue(){}
+function saveQueue(){persistEnc()}
 function enqueue(op){api.queue=api.queue.filter(o=>!(o.coll===op.coll&&o.id===op.id));api.queue.push(op);saveQueue();clearTimeout(api.timer);api.timer=setTimeout(flush,300)}
 async function flush(){
-  if(api.busy||!api.queue.length||mode!=="api")return;
-  api.busy=true;const batch=api.queue.slice(0,400);
-  try{const r=await fetch("/api/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ops:batch}),cache:"no-store"});
-    if(r.status===401){mode="login";return}
+  if(api.busy||!api.queue.length||mode!=="api"||!DK)return;
+  api.busy=true;const batch=api.queue.slice(0,300);
+  try{const ops=await Promise.all(batch.map(async o=>o.op==="put"?{op:"put",coll:o.coll,id:o.id,data:await encDoc(o.data)}:{op:"del",coll:o.coll,id:o.id}));
+    const r=await fetch("/api/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ops}),cache:"no-store"});
+    if(r.status===401){mode="auth";authTab="login";return}
     if(!r.ok){const j=await r.json().catch(()=>({}));api.error=j.error||("Erreur serveur "+r.status);throw new Error(api.error)}
     api.queue=api.queue.filter(o=>!batch.includes(o));saveQueue();api.online=true;api.error=null;
   }catch(e){if(!api.error)api.online=false}
   finally{api.busy=false;render();if(api.queue.length&&api.online&&!api.error&&mode==="api")setTimeout(flush,50)}
 }
 async function pull(){
-  if(mode!=="api")return;
+  if(mode!=="api"||!DK)return;
   if(api.queue.length){await flush();if(api.queue.length)return}
   try{const r=await fetch("/api/state",{cache:"no-store"});
-    if(r.status===401){mode="login";render();return}
+    if(r.status===401){mode="auth";authTab="login";render();return}
     if(!r.ok){const j=await r.json().catch(()=>({}));api.error=j.error||("Erreur serveur "+r.status);api.online=true;render();return}
-    const d=await r.json(), before=S;
-    const serverEmpty=!(d.recurring||[]).length&&!(d.accounts||[]).length&&!(d.ops||[]).length;
-    if(serverEmpty&&(before.recurring.length||before.accounts.length)){api.migrate=JSON.parse(JSON.stringify(before));render();return}
-    S={config:{...DEFAULT_CFG,...(d.config||{})},recurring:[],ops:[],accounts:[],projects:[],banks:[]};
-    COLLS.forEach(c=>S[c]=sortColl(c,d[c]||[]));
-    api.online=true;persist();render();
+    const {docs=[]}=await r.json();
+    const N={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};let bad=0;
+    for(const d of docs){try{const o=await decDoc(d.data);if(d.coll==="config"){if(d.id==="main")N.config={...DEFAULT_CFG,...o}}else if(N[d.coll])N[d.coll].push({...o,id:d.id})}catch{bad++}}
+    if(bad)api.error=`${bad} élément(s) illisible(s) avec ta clé`;
+    COLLS.forEach(c=>N[c]=sortColl(c,N[c]));
+    const serverEmpty=!docs.length;
+    let plain=null;try{plain=JSON.parse(localStorage.getItem(PLAIN)||"null")}catch{}
+    if(serverEmpty&&plain&&Array.isArray(plain.recurring)&&(plain.recurring.length||plain.accounts?.length))api.migrate=plain;
+    else if(plain&&!serverEmpty){try{localStorage.removeItem(PLAIN);localStorage.removeItem("comptes-foyer-queue")}catch{}}
+    S=N;api.online=true;persist();render();
   }catch{api.online=false;render()}
 }
 async function probeApi(){
-  try{const r=await fetch("/api/me",{cache:"no-store"});if(r.status===200)return "ok";if(r.status===401)return "login";if(r.status===500)return "error";return "none"}
-  catch{try{return localStorage.getItem(MKEY)==="api"?"offline":"none"}catch{return "none"}}
+  try{const r=await fetch("/api/me",{cache:"no-store"});
+    if(r.status===200){const j=await r.json().catch(()=>({}));return {s:"ok",email:j.email}}
+    if(r.status===401)return {s:"login"};if(r.status===500)return {s:"error"};return {s:"none"}}
+  catch{try{return {s:localStorage.getItem(MKEY)==="api"?"offline":"none"}}catch{return {s:"none"}}}
 }
-function loginView(){return `<section class="card" style="display:flex;flex-direction:column;gap:12px;max-width:420px;margin:24px auto 0;width:100%"><h2>Connexion</h2><p class="muted" style="margin:0">Tes comptes sont protégés par le mot de passe défini dans Vercel (variable APP_PASSWORD).</p><form data-form="login" style="display:flex;flex-direction:column;gap:10px"><div class="field"><label for="loginPw">Mot de passe</label><input id="loginPw" type="password" autocomplete="current-password" required></div><div class="err" id="loginErr" hidden></div><button class="btn primary">Se connecter</button></form></section>`}
-async function doLogin(f){const err=f.querySelector("#loginErr");err.hidden=true;
-  try{const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:f.querySelector("#loginPw").value}),cache:"no-store"});
-    const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"Connexion impossible.");
-    mode="api";try{localStorage.setItem(MKEY,"api")}catch{};render();await flush();await pull();toast("Connecté")}
-  catch(e){err.textContent=e.message==="Failed to fetch"?"Pas de connexion internet.":e.message;err.hidden=false}}
+async function afterAuth(){mode="api";api.error=null;api.online=true;
+  if(!(await loadVault())){S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};api.queue=[]}
+  render();await flush();await pull()}
+
+/* ---------- Écrans de compte ---------- */
+function authView(){
+  if(mode==="recovery")return `<section class="card authcard"><h2>Ta clé de secours</h2>
+    <p style="margin:0">C'est <b>le seul moyen</b> de récupérer tes données si tu oublies ton mot de passe : elles sont chiffrées, personne d'autre ne peut les ouvrir, pas même le créateur de l'app.</p>
+    <div class="reckey" id="recKey">${esc(newRecovery||"")}</div>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-act="reccopy">Copier</button><button type="button" class="btn small" data-act="recsave">Enregistrer dans un fichier</button></div>
+    <p class="note" style="margin:0">Note-la sur papier ou dans ton gestionnaire de mots de passe. Ne la garde pas seulement sur ce téléphone.</p>
+    <label class="check"><input type="checkbox" id="recOk"> Je l'ai mise en lieu sûr</label>
+    <button class="btn primary" data-act="recdone">Continuer</button></section>`;
+  if(mode==="unlock")return `<section class="card authcard"><h2>Déverrouiller</h2><p class="muted" style="margin:0">Tu es connecté avec <b>${esc(ACCT||"")}</b>. Saisis ton mot de passe pour déchiffrer tes données sur cet appareil.</p>
+    <form data-form="unlock" class="authform"><div class="field"><label for="ulPw">Mot de passe</label><input id="ulPw" type="password" autocomplete="current-password" required></div><div class="err" id="authErr" hidden></div><button class="btn primary">Déverrouiller</button></form>
+    <button class="btn small" data-act="logout">Changer de compte</button></section>`;
+  const tabs=[["login","Connexion"],["signup","Créer un compte"],["recover","Mot de passe oublié"]];
+  const nav=`<div class="seg" role="tablist">${tabs.map(([k,l])=>`<button type="button" role="tab" aria-pressed="${authTab===k}" data-act="authtab:${k}">${l}</button>`).join("")}</div>`;
+  let form="";
+  if(authTab==="login")form=`<form data-form="login" class="authform">
+      <div class="field"><label for="auEmail">E-mail</label><input id="auEmail" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="auPw">Mot de passe</label><input id="auPw" type="password" autocomplete="current-password" required></div>
+      <div class="err" id="authErr" hidden></div><button class="btn primary">Se connecter</button></form>`;
+  else if(authTab==="signup")form=`<form data-form="signup" class="authform">
+      <div class="field"><label for="suEmail">E-mail</label><input id="suEmail" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="suPw">Mot de passe</label><input id="suPw" type="password" autocomplete="new-password" minlength="10" required><span class="hint">10 caractères minimum. Une phrase de quelques mots est facile à retenir et solide.</span></div>
+      <div class="field"><label for="suPw2">Confirme le mot de passe</label><input id="suPw2" type="password" autocomplete="new-password" required></div>
+      <input type="text" name="website" id="suHp" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+      <label class="check"><input type="checkbox" id="suOk"> J'accepte la <a href="/confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a></label>
+      <p class="note" style="margin:0">Tes données sont chiffrées sur ton appareil avant d'être envoyées : sans ton mot de passe ou ta clé de secours, elles sont illisibles, y compris pour nous. Aucune donnée n'est revendue ni utilisée à des fins commerciales.</p>
+      <div class="err" id="authErr" hidden></div><button class="btn primary">Créer mon compte</button></form>`;
+  else form=`<form data-form="recover" class="authform">
+      <p class="muted" style="margin:0">Avec ta clé de secours, tu choisis un nouveau mot de passe sans perdre tes données.</p>
+      <div class="field"><label for="rcEmail">E-mail</label><input id="rcEmail" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="rcKey">Clé de secours</label><input id="rcKey" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" required></div>
+      <div class="field"><label for="rcPw">Nouveau mot de passe</label><input id="rcPw" type="password" autocomplete="new-password" minlength="10" required></div>
+      <div class="field"><label for="rcPw2">Confirme</label><input id="rcPw2" type="password" autocomplete="new-password" required></div>
+      <div class="err" id="authErr" hidden></div><button class="btn primary">Changer le mot de passe</button>
+      <p class="note" style="margin:0">Sans clé de secours, les données ne peuvent pas être récupérées : tu peux seulement recréer un compte.</p></form>`;
+  return `<section class="card authcard"><h2>Comptes du foyer</h2><p class="muted" style="margin:0">Ton budget, chiffré, sur tous tes appareils.</p>${nav}${form}</section>`;
+}
+function authBusy(f,on,label){const b=f.querySelector(".btn.primary");if(b){b.disabled=on;if(on){b.dataset.l=b.textContent;b.textContent=label||"Un instant…"}else if(b.dataset.l)b.textContent=b.dataset.l}}
+function authErr(f,msg){const e=f.querySelector("#authErr");if(e){e.textContent=msg;e.hidden=false}}
+async function doSignup(f){
+  const email=normEmail(f.querySelector("#suEmail").value),pw=f.querySelector("#suPw").value,pw2=f.querySelector("#suPw2").value;
+  if(pw.length<10)return authErr(f,"Le mot de passe doit faire au moins 10 caractères.");
+  if(pw!==pw2)return authErr(f,"Les deux mots de passe ne sont pas identiques.");
+  if(!f.querySelector("#suOk").checked)return authErr(f,"Accepte la politique de confidentialité pour continuer.");
+  authBusy(f,true,"Chiffrement…");
+  try{const k=await deriveKeys(pw,email,KDF_PW);
+    const dkey=await CR.generateKey({name:"AES-GCM",length:256},true,["encrypt","decrypt"]),raw=new Uint8Array(await CR.exportKey("raw",dkey));
+    const rec=newRecoveryString(),rk=await deriveKeys(rec.replace(/-/g,""),email,KDF_REC);
+    await apiPost("signup",{email,auth:k.auth,recoveryAuth:rk.auth,protectedKey:await seal(k.wrap,raw),recoveryKey:await seal(rk.wrap,raw),hp:f.querySelector("#suHp").value,consent:true});
+    await rememberKey(raw,email);raw.fill(0);newRecovery=rec;await wipeVaultOnly();mode="recovery";render()}
+  catch(e){authBusy(f,false);authErr(f,netMsg(e))}}
+async function wipeVaultOnly(){try{localStorage.removeItem(VKEY)}catch{}api.queue=[];S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]}}
+async function doLogin(f){
+  const email=normEmail(f.querySelector("#auEmail").value),pw=f.querySelector("#auPw").value;authBusy(f,true,"Connexion…");
+  try{const k=await deriveKeys(pw,email,KDF_PW);const j=await apiPost("login",{email,auth:k.auth});
+    const raw=await open_(k.wrap,j.protectedKey);if(ACCT&&ACCT!==email)await wipeVaultOnly();await rememberKey(raw,email);raw.fill(0);await afterAuth();toast("Connecté")}
+  catch(e){authBusy(f,false);authErr(f,e.status===401||e.name==="OperationError"?"E-mail ou mot de passe incorrect.":netMsg(e))}}
+async function doUnlock(f){
+  const pw=f.querySelector("#ulPw").value;authBusy(f,true,"Déchiffrement…");
+  try{const j=await apiPost("key",{});const k=await deriveKeys(pw,j.email,KDF_PW);const raw=await open_(k.wrap,j.protectedKey);await rememberKey(raw,j.email);raw.fill(0);await afterAuth()}
+  catch(e){authBusy(f,false);authErr(f,e.name==="OperationError"?"Mot de passe incorrect.":netMsg(e))}}
+async function doRecover(f){
+  const email=normEmail(f.querySelector("#rcEmail").value),rec=normRec(f.querySelector("#rcKey").value),pw=f.querySelector("#rcPw").value,pw2=f.querySelector("#rcPw2").value;
+  if(pw.length<10)return authErr(f,"Le mot de passe doit faire au moins 10 caractères.");if(pw!==pw2)return authErr(f,"Les deux mots de passe ne sont pas identiques.");
+  authBusy(f,true,"Vérification…");
+  try{const rk=await deriveKeys(rec.replace(/-/g,""),email,KDF_REC);const j=await apiPost("recovery-start",{email,recoveryAuth:rk.auth});
+    const raw=await open_(rk.wrap,j.recoveryKey),k=await deriveKeys(pw,email,KDF_PW);
+    await apiPost("recovery-finish",{email,recoveryAuth:rk.auth,newAuth:k.auth,newProtectedKey:await seal(k.wrap,raw)});
+    if(ACCT&&ACCT!==email)await wipeVaultOnly();await rememberKey(raw,email);raw.fill(0);await afterAuth();toast("Mot de passe changé")}
+  catch(e){authBusy(f,false);authErr(f,e.status===401||e.name==="OperationError"?"E-mail ou clé de secours incorrects.":netMsg(e))}}
 async function doLogout(){
   if(api.queue.length&&!f_confirmLogout){f_confirmLogout=true;toast(api.queue.length+" modification(s) pas encore envoyée(s). Reclique pour te déconnecter quand même.");return}
-  try{await fetch("/api/logout",{method:"POST",cache:"no-store"})}catch{}
-  api.queue=[];saveQueue();try{localStorage.removeItem("comptes-foyer")}catch{}
-  S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};mode="login";closeSheet();render();
+  f_confirmLogout=false;try{await apiPost("logout",{})}catch{}
+  await wipeLocal();mode="auth";authTab="login";closeSheet();render();
 }
 let f_confirmLogout=false;
+async function withPassword(f,pw){const j=await apiPost("key",{});const k=await deriveKeys(pw,j.email,KDF_PW);let raw;try{raw=await open_(k.wrap,j.protectedKey)}catch{throw new Error("Mot de passe incorrect.")}return {email:j.email,k,raw}}
+function accountSheet(){
+  sheet("Mon compte",`<p class="muted" style="margin:0">Connecté avec <b>${esc(ACCT||"")}</b>. Tes données sont chiffrées sur tes appareils.</p>
+    <details><summary>Changer le mot de passe</summary><div class="authform" style="margin-top:10px">
+      <div class="field"><label for="cpOld">Mot de passe actuel</label><input id="cpOld" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="cpNew">Nouveau mot de passe</label><input id="cpNew" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="cpNew2">Confirme</label><input id="cpNew2" type="password" autocomplete="new-password"></div>
+      <button type="button" class="btn small primary" id="cpGo">Changer</button><span class="note">Tes autres appareils devront se reconnecter.</span></div></details>
+    <details><summary>Nouvelle clé de secours</summary><div class="authform" style="margin-top:10px">
+      <div class="field"><label for="rrPw">Mot de passe</label><input id="rrPw" type="password" autocomplete="current-password"></div>
+      <button type="button" class="btn small primary" id="rrGo">Générer une nouvelle clé</button><span class="note">L'ancienne clé ne fonctionnera plus.</span></div></details>
+    <details><summary>Supprimer mon compte</summary><div class="authform" style="margin-top:10px">
+      <p class="note" style="margin:0">Toutes tes données sont supprimées du serveur, définitivement. Pense à exporter une sauvegarde avant.</p>
+      <div class="field"><label for="dlPw">Mot de passe</label><input id="dlPw" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="dlTxt">Écris SUPPRIMER</label><input id="dlTxt" autocomplete="off"></div>
+      <button type="button" class="btn small danger" id="dlGo">Supprimer définitivement</button></div></details>
+    <div class="err" id="accErr" hidden></div>
+    <div class="actions"><a class="btn small" href="/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><button type="button" class="btn small danger" data-act="logout">Se déconnecter</button></div>`,
+  async()=>false,
+  f=>{const err=m=>{const e=f.querySelector("#accErr");e.textContent=m;e.hidden=false};
+    f.querySelector("#cpGo").addEventListener("click",async ev=>{const b=ev.target,o=f.querySelector("#cpOld").value,n=f.querySelector("#cpNew").value;
+      if(n.length<10)return err("Le nouveau mot de passe doit faire au moins 10 caractères.");if(n!==f.querySelector("#cpNew2").value)return err("Les deux mots de passe ne sont pas identiques.");
+      b.disabled=true;try{const {email,k,raw}=await withPassword(f,o);const nk=await deriveKeys(n,email,KDF_PW);
+        await apiPost("password",{auth:k.auth,newAuth:nk.auth,newProtectedKey:await seal(nk.wrap,raw)});raw.fill(0);closeSheet();toast("Mot de passe changé")}catch(e){err(netMsg(e))}finally{b.disabled=false}});
+    f.querySelector("#rrGo").addEventListener("click",async ev=>{const b=ev.target;b.disabled=true;
+      try{const {email,k,raw}=await withPassword(f,f.querySelector("#rrPw").value);const rec=newRecoveryString(),rk=await deriveKeys(rec.replace(/-/g,""),email,KDF_REC);
+        await apiPost("recovery-rotate",{auth:k.auth,newRecoveryAuth:rk.auth,newRecoveryKey:await seal(rk.wrap,raw)});raw.fill(0);newRecovery=rec;closeSheet();mode="recovery";render()}catch(e){err(netMsg(e))}finally{b.disabled=false}});
+    f.querySelector("#dlGo").addEventListener("click",async ev=>{if(f.querySelector("#dlTxt").value.trim().toUpperCase()!=="SUPPRIMER")return err("Écris SUPPRIMER pour confirmer.");const b=ev.target;b.disabled=true;
+      try{const {k}=await withPassword(f,f.querySelector("#dlPw").value);await apiPost("delete",{auth:k.auth});await wipeLocal();closeSheet();mode="auth";authTab="signup";render();toast("Compte supprimé")}catch(e){err(netMsg(e))}finally{b.disabled=false}});
+  });
+}
+function legacySheet(){
+  sheet("Récupérer l'ancienne version",`<p class="muted" style="margin:0">Importe les données de la version à mot de passe unique (non chiffrée) dans ton compte. Elles seront chiffrées, puis l'ancienne copie sera supprimée du serveur.</p>
+    <div class="field"><label for="lgPw">Ancien mot de passe de l'app (APP_PASSWORD)</label><input id="lgPw" name="pw" type="password" autocomplete="off" required></div>
+    <div class="actions"><button class="btn primary">Récupérer</button></div>`,
+  async fd=>{const pw=fd.get("pw");let j;try{j=await apiPost("legacy",{password:pw})}catch(e){throw new Error(netMsg(e))}
+    await importAll(j.state);const t0=Date.now();while(api.queue.length&&Date.now()-t0<30000){await flush();if(api.error)break;await new Promise(r=>setTimeout(r,300))}
+    if(api.queue.length)throw new Error("Données importées sur l'appareil, mais pas encore envoyées. L'ancienne copie n'a pas été supprimée : réessaie plus tard.");
+    try{await apiPost("legacy-drop",{password:pw})}catch{}toast("Anciennes données récupérées et chiffrées")});
+}
 async function importAll(d){
   for(const c of COLLS){for(const x of [...S[c]])await del(c,x.id);for(const x of (d[c]||[]))await put(c,x.id||uid(),x)}
   await putConfig({...DEFAULT_CFG,...(d.config||{})});
 }
-function persist(){try{localStorage.setItem("comptes-foyer",JSON.stringify(S))}catch{}}
+function persist(){if(mode==="api"){persistEnc();return}try{localStorage.setItem("comptes-foyer",JSON.stringify(S))}catch{}}
 function sortColl(c,L){
   if(c==="recurring")return L.sort((a,b)=>(a.kind===b.kind?0:a.kind==="in"?-1:1)||monthlyEq(b)-monthlyEq(a));
   if(c==="accounts")return L.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
@@ -1251,19 +1411,18 @@ async function boot(){
     let saved=null;try{saved=JSON.parse(localStorage.getItem("comptes-foyer")||"null")}catch{}
     const inClaude=!!(window.claude&&window.claude.use);
     if(!inClaude){const pr=await probeApi();
-      if(pr!=="none"){try{localStorage.setItem(MKEY,"api")}catch{}
-        let cache=null;try{cache=JSON.parse(localStorage.getItem("comptes-foyer")||"null")}catch{}
-        if(cache&&Array.isArray(cache.recurring))S={...S,...cache,config:{...DEFAULT_CFG,...(cache.config||{})}};
-        loadQueue();
+      if(pr.s!=="none"){
         const sync=()=>{if(mode==="api"){api.error=null;api.online=true;flush().then(pull)}};
         window.addEventListener("online",sync);
         document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")sync()});
         setInterval(()=>{if(mode==="api"&&api.queue.length)flush()},30000);
-        if(pr==="login"){mode="login";render();return}
-        mode="api";api.online=pr!=="offline";if(pr==="error")api.error="configuration du serveur incomplète (voir le README)";
-        render();
-        sync();
-        return}}
+        let k=null,em=null;try{k=await kv("get","dk");em=await kv("get","email")}catch{}
+        let known=false;try{known=localStorage.getItem(MKEY)==="api"}catch{}
+        if(pr.s==="error"){mode="api";api.error="configuration du serveur incomplète (voir le README)";if(k){DK=k;ACCT=em;await loadVault()}render();return}
+        if(pr.s==="login"){if(k)await wipeLocal();mode="auth";authTab=known?"login":"signup";render();return}
+        if(pr.s==="offline"){if(k){DK=k;ACCT=em;await loadVault();mode="api";api.online=false;render();return}mode="auth";authTab="login";render();return}
+        if(k&&em===pr.email){DK=k;ACCT=em;await loadVault();mode="api";render();sync();return}
+        ACCT=pr.email;mode="unlock";render();return}}
     if(saved&&Array.isArray(saved.recurring)){S={...S,...saved,config:{...DEFAULT_CFG,...(saved.config||{})}};mode="local"}
     else if(inClaude){S=demoData();mode="demo"}
     else mode="local";
@@ -1303,7 +1462,15 @@ document.addEventListener("click",e=>{
   else if(k==="calb"){calBank=id;if($("#layer").innerHTML)calSheet();else render()}
   else if(k==="cal")calSheet();
   else if(k==="budget"){if(readOnly)toast("Lecture seule");else budgetSheet()}
-  else if(k==="migrate"){const d=api.migrate;api.migrate=null;if(d){S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};importAll(d).then(()=>toast("Données envoyées vers ton compte"))}}
+  else if(k==="migrate"){const d=api.migrate;api.migrate=null;if(d){importAll(d).then(()=>{try{localStorage.removeItem(PLAIN)}catch{}toast("Données importées et chiffrées")})}}
+  else if(k==="migrateskip"){api.migrate=null;try{localStorage.removeItem(PLAIN)}catch{}render()}
+  else if(k==="authtab"){authTab=id;render()}
+  else if(k==="reccopy"){const t=newRecovery||"";(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Clé copiée")).catch(()=>{const el=$("#recKey");if(el){const r=document.createRange();r.selectNodeContents(el);const sl=getSelection();sl.removeAllRanges();sl.addRange(r)}toast("Sélectionne et copie la clé")})}
+  else if(k==="recsave")saveText("cle-de-secours-comptes-du-foyer.txt",`Comptes du foyer — clé de secours\nCompte : ${ACCT}\nClé : ${newRecovery}\n\nGarde ce fichier en lieu sûr. Il permet de choisir un nouveau mot de passe sans perdre tes données.\n`,"text/plain")
+  else if(k==="recdone"){if(!$("#recOk")?.checked){toast("Coche la case une fois la clé mise en lieu sûr");return}newRecovery=null;afterAuth()}
+  else if(k==="logout")doLogout();
+  else if(k==="account")accountSheet();
+  else if(k==="legacy")legacySheet();
   else if(k==="start"){if(readOnly)toast("Lecture seule");else startSheet()}
   else if(k==="merge"){if(readOnly)toast("Lecture seule");else{const [oid,iid]=id.split("|");mergeTransfer(oid,iid).catch(x=>toast(x.message))}}
   else if(k==="addbank"){if(readOnly)toast("Lecture seule");else bankSheet()}
@@ -1338,7 +1505,7 @@ document.addEventListener("input",e=>{
   if(id==="longM"){longMonthly=num(e.target.value);updateLong()}
 });
 document.addEventListener("change",e=>{if(e.target.id==="impEmpty"){const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.recurring))throw new Error();await importAll(d);toast("Données importées")}catch{toast("Ce fichier n'est pas une sauvegarde de l'application.")}};rd.readAsText(file);return}if(e.target.id==="simAcc"){sim.acc=e.target.value;simLoad();if($("#layer").innerHTML)simSheet();else render()}});
-document.addEventListener("submit",async e=>{const f=e.target;if(f.dataset.form==="login"){e.preventDefault();doLogin(f);return}if(f.dataset.form==="age"){e.preventDefault();const v=num(f.querySelector("#ageIn").value);if(v<14||v>110){toast("Âge invalide");return}try{await putConfig({...S.config,age:v});toast("Âge enregistré")}catch(x){toast(x.message)}}});
+document.addEventListener("submit",async e=>{const f=e.target;const af={login:doLogin,signup:doSignup,recover:doRecover,unlock:doUnlock}[f.dataset.form];if(af){e.preventDefault();af(f);return}if(f.dataset.form==="age"){e.preventDefault();const v=num(f.querySelector("#ageIn").value);if(v<14||v>110){toast("Âge invalide");return}try{await putConfig({...S.config,age:v});toast("Âge enregistré")}catch(x){toast(x.message)}}});
 boot();
 </script>
 
