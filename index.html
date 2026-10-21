@@ -155,7 +155,10 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .stat .k{font-size:12.5px;color:var(--muted);font-weight:600}
 .stat .v{font-family:var(--f-display);font-weight:700;font-size:clamp(17px,4.6vw,22px);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .stat .s{font-size:12.5px;color:var(--muted)}
-.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:6;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);padding:14px 20px;font-weight:700;box-shadow:0 6px 20px rgba(20,28,40,.25);cursor:pointer;display:flex;gap:8px;align-items:center}
+.fabs{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;gap:10px;align-items:center}
+.fab.fab2{background:var(--surface);color:var(--accent);border:1px solid var(--line)}
+.fab svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+.fab{border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);padding:14px 20px;font-weight:700;box-shadow:0 6px 20px rgba(20,28,40,.25);cursor:pointer;display:flex;gap:8px;align-items:center}
 .chart{width:100%;height:auto;display:block}
 .chart text{fill:var(--muted);font-family:var(--f-body);font-size:11px}
 .chart .axis{stroke:var(--line)}
@@ -534,7 +537,7 @@ function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===tab)));
   $("#modeLbl").textContent=mode==="db"?(readOnly?"Lecture seule":"Enregistré automatiquement"):mode==="api"?(api.error?"Erreur de synchronisation":api.queue.length?(api.online?"Synchronisation…":`Hors ligne · ${api.queue.length} en attente`):(api.online?"Synchronisé":"Hors ligne")):mode==="local"?"Enregistré sur cet appareil":mode==="demo"?"Données d'exemple":"Chargement…";
   if(mode==="loading")return;
-  if(mode==="login"){$("#main").innerHTML=loginView();$("#fab")?.remove();return}
+  if(mode==="login"){$("#main").innerHTML=loginView();$("#fabs")?.remove();return}
   const m=$("#main");
   let html="";
   if(mode==="api"&&api.migrate)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Ton compte en ligne est vide, mais cet appareil contient des données. Les envoyer vers ton compte ?</span><button class="btn small primary" data-act="migrate">Envoyer</button></div>`;
@@ -546,9 +549,9 @@ function render(){
   if(empty&&tab!=="avenir")html+=emptyState();
   else html+={mois:viewMois,fixes:viewFixes,epargne:viewEpargne,avenir:viewAvenir}[tab]();
   m.innerHTML=html;
-  $("#fab")?.remove();
+  $("#fabs")?.remove();
   const fabAct={mois:"addop",fixes:"addrec",epargne:"addacc"}[tab];
-  if(fabAct&&!readOnly&&!empty){const b=document.createElement("button");b.className="fab";b.id="fab";b.dataset.act=fabAct;b.setAttribute("aria-label",{addop:"Ajouter une opération",addrec:"Ajouter une entrée ou une charge fixe",addacc:"Ajouter un compte d'épargne"}[fabAct]);b.innerHTML=`<span aria-hidden="true">＋</span> Ajouter`;document.body.appendChild(b)}
+  if(fabAct&&!readOnly&&!empty){const b=document.createElement("button");b.className="fab";b.id="fab";b.dataset.act=fabAct;b.setAttribute("aria-label",{addop:"Ajouter une opération",addrec:"Ajouter une entrée ou une charge fixe",addacc:"Ajouter un compte d'épargne"}[fabAct]);b.innerHTML=`<span aria-hidden="true">＋</span> Ajouter`;const w=document.createElement("div");w.className="fabs";w.id="fabs";if(tab==="epargne"&&S.accounts.length){const sb=document.createElement("button");sb.className="fab fab2";sb.dataset.act="sim";sb.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l4-5 3 3 5-7"/></svg> Simuler`;w.appendChild(sb)}w.appendChild(b);document.body.appendChild(w)}
   if(tab==="epargne")updateSim();
   if(tab==="avenir")updateLong();
 }
@@ -726,7 +729,7 @@ function calLow(k){const {L,dim}=dayItems(k,null);if(!L.length)return null;const
   return {low,n:L.filter(x=>x.d).length,undated:L.filter(x=>!x.d).length}}
 function calEntry(){const c=calLow(CUR);if(!c)return "";
   return `<section class="card calentry"><div style="flex:1;min-width:0"><h2>Calendrier des prélèvements</h2><div class="note">${c.low.d?`Point bas le <b>${c.low.d}</b> : <b>${e0(c.low.v)}</b> par rapport au début du mois`:"Aucun point bas ce mois-ci"}${c.undated?` · ${c.undated} sans jour`:""}</div></div><button class="btn small primary" data-act="cal">Voir</button></section>`}
-function calSheet(){sheet("Calendrier des prélèvements",calSection(true),async()=>{})}
+function calSheet(){sheet("Calendrier des prélèvements",calSection(true),async()=>false)}
 function viewFixes(){
   const ins=S.recurring.filter(r=>r.kind==="in"), outs=S.recurring.filter(r=>isOut(r)), trs=S.recurring.filter(r=>r.kind==="transfer");
   const bankSum=id=>{const inB=x=>bankOf(x)===id, act=S.recurring.filter(activeNow);
@@ -800,8 +803,12 @@ function viewEpargne(){
   <div class="list">${S.accounts.map(accRow).join("")||'<div class="row muted" style="cursor:default">Aucun compte</div>'}</div></section>
   <section class="sec"><div class="sechead"><h2>Projets</h2>${readOnly?"":`<button class="btn small" data-act="addproj">Ajouter</button>`}</div>
   ${pj.length?`<div class="list">${pj.map(x=>`<button class="row" data-act="proj:${x.p.id}"><div class="main"><div>${esc(x.p.name)}</div><div class="sub">${e0(num(x.p.saved))} sur ${e0(num(x.p.target))}${x.p.deadline?` · ${monthName(x.p.deadline)}`:'<span class="tag warn">Sans échéance</span>'}</div></div><div class="amt">${x.need!==null?e0(x.need)+"/mois":"—"}</div></button>`).join("")}</div>`:`<p class="note" style="margin:0">Un projet = un montant et une date. L'application calcule ce qu'il faut mettre de côté chaque mois.</p>`}</section>
-  <section class="sec"><div class="sechead"><h2>Simulateur</h2><span class="note">Combien j'aurai après mes versements</span></div>
-  <div class="card" style="display:flex;flex-direction:column;gap:12px">
+`;
+}
+function simHtml(){
+  if(sim.acc===null)sim.acc=S.accounts[0]?.id||"";
+  if(sim.rate===undefined||sim.rate===null){const a0=S.accounts.find(x=>x.id===sim.acc);sim.rate=a0&&has(a0.rate)?num(a0.rate):1.7}
+  return `<p class="note" style="margin:0">Combien j'aurai après mes versements.</p>
     <div class="grid2">
       <div class="field"><label for="simAcc">Compte</label><select id="simAcc">${S.accounts.map(a=>`<option value="${a.id}" ${sim.acc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}<option value="" ${!sim.acc?"selected":""}>Nouveau placement (à 0 €)</option></select></div>
       <div class="field"><label for="simRate">Taux annuel (%)</label><input id="simRate" inputmode="decimal" value="${esc(sim.rate??"")}"></div>
@@ -812,8 +819,9 @@ function viewEpargne(){
     </div>
     <div id="simOut"></div>
     <p class="note" style="margin:0">Estimation. Les livrets réglementés calculent les intérêts par quinzaine et les versent au 31 décembre ; les versements au-delà du plafond sont refusés. Livret A et LDDS : 1,7 %, LEP : 2,5 % depuis le 1er août 2026.</p>
-  </div></section>`;
+`;
 }
+function simSheet(){sheet("Simulateur",simHtml(),async()=>false,()=>updateSim())}
 function updateSim(){
   const out=$("#simOut"); if(!out)return;
   const a=S.accounts.find(x=>x.id===sim.acc);
@@ -897,7 +905,7 @@ function sheet(title,body,onSubmit,extra){
   const L=$("#layer");
   L.innerHTML=`<div class="scrim" data-act="close"><form class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" novalidate><div class="head"><h2>${esc(title)}</h2><button type="button" class="iconbtn" data-act="close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>${body}<div class="err" id="formErr" hidden></div></form></div>`;
   const f=L.querySelector("form");
-  f.addEventListener("submit",async e=>{e.preventDefault();const err=$("#formErr");err.hidden=true;try{await onSubmit(new FormData(f),f);closeSheet()}catch(x){err.textContent=x.message||String(x);err.hidden=false}});
+  f.addEventListener("submit",async e=>{e.preventDefault();const err=$("#formErr");err.hidden=true;try{const r=await onSubmit(new FormData(f),f);if(r!==false)closeSheet()}catch(x){err.textContent=x.message||String(x);err.hidden=false}});
   extra&&extra(f);
   setTimeout(()=>f.querySelector("input:not([type=hidden]),select")?.focus(),30);
 }
@@ -1249,6 +1257,7 @@ document.addEventListener("click",e=>{
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
   else if(k==="export")exportJson();
+  else if(k==="sim")simSheet();
   else if(k==="cover"){if(readOnly)toast("Lecture seule");else{const [bk,amt]=id.split("|");coverSheet(bk,num(amt))}}
   else if(k==="accmonth"){const x=S.accounts.find(y=>y.id===id);x&&accMonthSheet(x)}
   else if(k==="fsort"){fixSort=id;render()}
@@ -1289,7 +1298,7 @@ document.addEventListener("input",e=>{
   if(["simRate","simMonthly","simOnce","simMonths","simTarget"].includes(id)){sim[{simRate:"rate",simMonthly:"monthly",simOnce:"once",simMonths:"months",simTarget:"target"}[id]]=e.target.value;updateSim()}
   if(id==="longM"){longMonthly=num(e.target.value);updateLong()}
 });
-document.addEventListener("change",e=>{if(e.target.id==="impEmpty"){const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.recurring))throw new Error();await importAll(d);toast("Données importées")}catch{toast("Ce fichier n'est pas une sauvegarde de l'application.")}};rd.readAsText(file);return}if(e.target.id==="simAcc"){sim.acc=e.target.value;const a=S.accounts.find(x=>x.id===sim.acc);sim.rate=a&&has(a.rate)?num(a.rate):1.7;render()}});
+document.addEventListener("change",e=>{if(e.target.id==="impEmpty"){const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.recurring))throw new Error();await importAll(d);toast("Données importées")}catch{toast("Ce fichier n'est pas une sauvegarde de l'application.")}};rd.readAsText(file);return}if(e.target.id==="simAcc"){sim.acc=e.target.value;const a=S.accounts.find(x=>x.id===sim.acc);sim.rate=a&&has(a.rate)?num(a.rate):1.7;if($("#layer").innerHTML)simSheet();else render()}});
 document.addEventListener("submit",async e=>{const f=e.target;if(f.dataset.form==="login"){e.preventDefault();doLogin(f);return}if(f.dataset.form==="age"){e.preventDefault();const v=num(f.querySelector("#ageIn").value);if(v<14||v>110){toast("Âge invalide");return}try{await putConfig({...S.config,age:v});toast("Âge enregistré")}catch(x){toast(x.message)}}});
 boot();
 </script>
