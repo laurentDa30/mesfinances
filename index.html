@@ -271,7 +271,7 @@ const today=new Date();
 const CUR=mk(today.getFullYear(),today.getMonth()+1);
 let viewMonth=CUR;
 let tab=(()=>{const h=(location.hash||"").slice(1);return ["mois","fixes","epargne","avenir"].includes(h)?h:"mois"})();
-let sim={drive:"monthly",acc:null,monthly:100,once:0,months:24,target:""};
+let sim={loadedFor:undefined,drive:"monthly",acc:null,monthly:100,once:0,months:24,target:""};
 let longMonthly=null;
 const openGroups=new Set();
 
@@ -811,12 +811,16 @@ function viewEpargne(){
   ${pj.length?`<div class="list">${pj.map(x=>`<button class="row" data-act="proj:${x.p.id}"><div class="main"><div>${esc(x.p.name)}</div><div class="sub">${e0(num(x.p.saved))} sur ${e0(num(x.p.target))}${x.p.deadline?` · ${monthName(x.p.deadline)}`:'<span class="tag warn">Sans échéance</span>'}</div></div><div class="amt">${x.need!==null?e0(x.need)+"/mois":"—"}</div></button>`).join("")}</div>`:`<p class="note" style="margin:0">Un projet = un montant et une date. L'application calcule ce qu'il faut mettre de côté chaque mois.</p>`}</section>
 `;
 }
+function simLoad(){const a=S.accounts.find(x=>x.id===sim.acc);
+  // reprend les valeurs en place du compte choisi : taux et versement mensuel actuels
+  sim.rate=a&&has(a.rate)?num(a.rate):1.7;sim.monthly=a?num(a.monthly):100;sim.once=0;sim.drive="monthly";sim.loadedFor=sim.acc}
 function simHtml(){
   if(sim.acc===null)sim.acc=S.accounts[0]?.id||"";
-  if(sim.rate===undefined||sim.rate===null){const a0=S.accounts.find(x=>x.id===sim.acc);sim.rate=a0&&has(a0.rate)?num(a0.rate):1.7}
+  if(sim.loadedFor!==sim.acc)simLoad();
+  const a=S.accounts.find(x=>x.id===sim.acc);
   return `<p class="note" style="margin:0">Combien j'aurai après mes versements.</p>
     <div class="grid2">
-      <div class="field"><label for="simAcc">Compte</label><select id="simAcc">${S.accounts.map(a=>`<option value="${a.id}" ${sim.acc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}<option value="" ${!sim.acc?"selected":""}>Nouveau placement (à 0 €)</option></select></div>
+      <div class="field"><label for="simAcc">Compte</label><select id="simAcc">${S.accounts.map(a=>`<option value="${a.id}" ${sim.acc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}<option value="" ${!sim.acc?"selected":""}>Nouveau placement (à 0 €)</option></select>${a?`<span class="hint">En place : solde ${has(a.balance)?e0(accEst(a)):"non renseigné (0 €)"} · ${e0(num(a.monthly))}/mois · ${num(a.rate).toLocaleString("fr-FR")} %${num(a.cap)?` · plafond ${e0(num(a.cap))}`:""}</span>`:""}</div>
       <div class="field"><label for="simRate">Taux annuel (%)</label><input id="simRate" inputmode="decimal" value="${esc(sim.rate??"")}"></div>
       <div class="field"><label for="simMonthly">Versement mensuel (€)</label><input id="simMonthly" inputmode="decimal" value="${esc(sim.monthly)}"><span class="hint" id="simMonthlyHint"></span></div>
       <div class="field"><label for="simOnce">Versement unique aujourd'hui (€)</label><input id="simOnce" inputmode="decimal" value="${esc(sim.once)}"></div>
@@ -1333,7 +1337,7 @@ document.addEventListener("input",e=>{
   if(["simRate","simMonthly","simOnce","simMonths","simTarget"].includes(id)){sim[{simRate:"rate",simMonthly:"monthly",simOnce:"once",simMonths:"months",simTarget:"target"}[id]]=e.target.value;if(id==="simMonths")sim.drive="months";else if(id==="simMonthly"||id==="simOnce")sim.drive="monthly";updateSim()}
   if(id==="longM"){longMonthly=num(e.target.value);updateLong()}
 });
-document.addEventListener("change",e=>{if(e.target.id==="impEmpty"){const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.recurring))throw new Error();await importAll(d);toast("Données importées")}catch{toast("Ce fichier n'est pas une sauvegarde de l'application.")}};rd.readAsText(file);return}if(e.target.id==="simAcc"){sim.acc=e.target.value;const a=S.accounts.find(x=>x.id===sim.acc);sim.rate=a&&has(a.rate)?num(a.rate):1.7;if($("#layer").innerHTML)simSheet();else render()}});
+document.addEventListener("change",e=>{if(e.target.id==="impEmpty"){const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.recurring))throw new Error();await importAll(d);toast("Données importées")}catch{toast("Ce fichier n'est pas une sauvegarde de l'application.")}};rd.readAsText(file);return}if(e.target.id==="simAcc"){sim.acc=e.target.value;simLoad();if($("#layer").innerHTML)simSheet();else render()}});
 document.addEventListener("submit",async e=>{const f=e.target;if(f.dataset.form==="login"){e.preventDefault();doLogin(f);return}if(f.dataset.form==="age"){e.preventDefault();const v=num(f.querySelector("#ageIn").value);if(v<14||v>110){toast("Âge invalide");return}try{await putConfig({...S.config,age:v});toast("Âge enregistré")}catch(x){toast(x.message)}}});
 boot();
 </script>
