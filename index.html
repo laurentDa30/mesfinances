@@ -650,13 +650,13 @@ function calSection(){
   L.filter(x=>x.d).forEach(x=>{const D=days[x.d-1];D.items.push(x);if(x.t==="in")D.inn+=x.a;else if(x.t==="save")D.save+=x.a;else D.out+=x.a});
   let run=0,low={v:0,d:null};const cum=days.map(D=>{run+=D.inn-D.out-D.save;if(run<low.v)low={v:run,d:D.d};return run});
   const undated=L.filter(x=>!x.d);
-  const W=420,H=230,P={l:60,r:8,t:14,b:22},bw=(W-P.l-P.r)/dim;
+  const W=420,H=236,P={l:60,r:8,t:20,b:22},bw=(W-P.l-P.r)/dim;
   const maxUp=Math.max(...days.map(D=>D.inn),...cum,0), maxDn=Math.max(...days.map(D=>D.out+D.save),...cum.map(v=>-v),0)||1;
   const top=maxUp*1.1, bot=-maxDn*1.1, y=v=>P.t+(top-v)/(top-bot)*(H-P.t-P.b), x=d=>P.l+(d-1)*bw;
   let g=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Répartition des prélèvements sur le mois">`;
   niceTicks(bot,top,4).forEach(t=>{g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ${t?'stroke-dasharray="2 4"':'stroke-width="1.5"'}/><text x="${P.l-6}" y="${y(t)+4}" text-anchor="end">${e0(t)}</text>`});
   const tday=today.getDate();
-  g+=`<rect x="${x(tday)}" y="${P.t}" width="${bw}" height="${H-P.t-P.b}" fill="var(--accent)" opacity=".08"/>`;
+  g+=`<rect x="${x(tday)}" y="${P.t}" width="${bw}" height="${H-P.t-P.b}" fill="var(--accent)" opacity=".1"><title>Aujourd'hui (le ${tday})</title></rect><text x="${x(tday)+bw/2}" y="${P.t-5}" text-anchor="middle" style="fill:var(--accent);font-weight:600">auj.</text>`;
   days.forEach(D=>{const bx=x(D.d)+bw*0.15,w=bw*0.7,tip=D.items.map(i=>`${i.t==="in"?"+":"−"}${e2(i.a)} ${i.l}`).join("\n");
     if(D.inn)g+=`<rect x="${bx}" y="${y(D.inn)}" width="${w}" height="${y(0)-y(D.inn)}" rx="2" fill="var(--good)"><title>Le ${D.d} :\n${esc(tip)}</title></rect>`;
     if(D.out)g+=`<rect x="${bx}" y="${y(0)}" width="${w}" height="${y(-D.out)-y(0)}" rx="2" fill="var(--ink)" opacity=".75"><title>Le ${D.d} :\n${esc(tip)}</title></rect>`;
@@ -671,7 +671,7 @@ function calSection(){
   ${multi()?`<div class="chips" role="group" aria-label="Compte"><button class="chip" data-act="calb:all" aria-pressed="${calBank==="all"}">Tous les comptes</button>${S.banks.map(b=>`<button class="chip" data-act="calb:${b.id}" aria-pressed="${calBank===b.id}">${esc(b.name)}</button>`).join("")}</div>`:""}
   <div class="card" style="display:flex;flex-direction:column;gap:10px">
     ${g}
-    <div class="legend"><div><i style="background:var(--good)"></i>Entrées</div><div><i class="c-fix"></i>Prélèvements</div><div><i class="c-save"></i>Épargne</div><div><i style="background:var(--warn);height:3px;border-radius:2px"></i>Cumul du mois</div></div>
+    <div class="legend"><div><i style="background:var(--good)"></i>Entrées</div><div><i class="c-fix"></i>Prélèvements</div><div><i class="c-save"></i>Épargne</div><div><i style="background:var(--warn);height:3px;border-radius:2px"></i>Cumul du mois</div><div><i style="background:var(--accent);opacity:.25"></i>Aujourd'hui</div></div>
     ${low.d?`<div class="banner" style="background:var(--warn-soft)">Point bas le <b>${low.d}</b> : <b>${e0(low.v)}</b> par rapport au début du mois${sal&&sal.d>low.d?`, avant l'arrivée de « ${esc(sal.l)} » le ${sal.d}`:""}. ${B||!multi()?"Ce compte":"Tes comptes"} doi${B||!multi()?"t":"vent"} avoir au moins cette somme en début de mois pour passer sans découvert.</div>`:""}
     <div class="weeks">${parts.map(q=>`<div><div class="note">Du ${q.a} au ${q.b}</div><div class="num wk-out">${q.out?"−"+e0(q.out):"0 €"}</div>${q.inn?`<div class="num wk-in">+${e0(q.inn)}</div>`:""}</div>`).join("")}</div>
     ${undated.length?`<p class="note" style="margin:0">${undated.length} ligne${undated.length>1?"s":""} sans jour (${e0(sum(undated,x=>x.a))}) ne figure${undated.length>1?"nt":""} pas dans le graphique : ${undated.slice(0,4).map(x=>esc(x.l)).join(", ")}${undated.length>4?"…":""}. Indique leur jour pour les placer.</p>`:""}
