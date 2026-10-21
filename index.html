@@ -549,14 +549,24 @@ function viewMois(){
   <section class="sec"><div class="sechead"><h2>Opérations du mois</h2></div>${opsList(c)}</section>`;
   return h;
 }
+function todayNote(t){
+  const last=new Date(pm(CUR).y,pm(CUR).m,0).getDate(), fin=`jusqu'au ${last}`, cush=num(S.config.cushion);
+  const avail=Math.max(0,Math.min(t.res.R,t.cashFree)), tomorrow=t.daysLeft>1?avail/(t.daysLeft-1):0;
+  if(t.v<=0){
+    if(!t.byBudget&&t.cashFree<=0)return `Ton compte ne peut plus absorber de dépenses courantes d'ici la fin du mois : il manque ${e0(-t.cashFree)} pour garder ta marge de ${e0(cush)}.`;
+    if(t.byBudget&&t.res.R<=0)return `Ton budget vie courante du mois est entièrement utilisé.${t.res.spent>t.res.total?` Dépassement : ${e0(t.res.spent-t.res.total)}.`:""}`;
+    return `Tu as déjà dépensé ta part du jour (${e0(t.spentToday)}).${t.daysLeft>1&&tomorrow>0?` À partir de demain : environ <b>${e0(tomorrow)}/jour</b> ${fin}.`:""}`;
+  }
+  const why=t.byBudget?"Limité par ton budget vie courante.":`Limité par ${t.hasPoint?"ton compte":"ton reste du mois"} (marge de ${e0(cush)} gardée).`;
+  return `${why}${t.spentToday?` Déjà dépensé aujourd'hui : ${e0(t.spentToday)}.`:""}${t.daysLeft>1?` Rythme : environ <b>${e0(t.perDay)}/jour</b> ${fin}.`:" Dernier jour du mois."}`;
+}
 function todayCard(){
   const t=todaySpend();
   if(!t)return readOnly?"":`<section class="card today"><div class="k">Dépensable aujourd'hui</div><p class="muted" style="margin:0">Règle ton budget vie courante (courses, essence, sorties…) pour savoir chaque jour combien tu peux dépenser sans te mettre dans le rouge.</p><div><button class="btn small primary" data-act="budget">Régler mon budget</button></div></section>`;
   const v=Math.max(0,t.v), lvl=t.v<=0?"bad":t.v<5?"warn":"good";
   return `<section class="card today ${lvl}"><div class="k">Tu peux dépenser aujourd'hui</div>
     <div class="tbig ${t.v<=0?"neg":""}">${e0(v)}</div>
-    <div class="note">${t.v<=0?(t.byBudget&&t.res.R<=0?"Budget vie courante épuisé pour ce mois.":!t.byBudget&&t.cashFree<=0?"Ton compte ne permet plus de dépense courante ce mois-ci.":"Ta part du jour est déjà dépensée."):t.byBudget?"Limité par ton budget vie courante.":`Limité par ${t.hasPoint?"ton compte":"ton reste du mois"} (marge de ${e0(num(S.config.cushion))} gardée).`}
-    ${t.spentToday?` Déjà dépensé aujourd'hui : ${e0(t.spentToday)}.`:""} Ensuite environ <b>${e0(t.perDay)}/jour</b> pendant ${t.daysLeft} jour${t.daysLeft>1?"s":""}.</div></section>`;
+    <div class="note">${todayNote(t)}</div></section>`;
 }
 function envSection(k){
   const L=lifePlan();if(!(L.total>0))return "";
