@@ -108,6 +108,21 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .pend summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--accent);margin-top:4px}
 .pendlist{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:14px}
 .pendlist>div{display:flex;justify-content:space-between;gap:12px}
+.today{display:flex;flex-direction:column;gap:6px;border-width:1.5px}
+.today.good{border-color:var(--good)} .today.warn{border-color:var(--warn)} .today.bad{border-color:var(--bad)}
+.today .k{font-size:13px;color:var(--muted);font-weight:600}
+.today .tbig{font-family:var(--f-display);font-weight:800;font-size:40px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--good)}
+.today.warn .tbig{color:var(--warn)} .today .tbig.neg{color:var(--bad)}
+.envs{display:flex;flex-direction:column;gap:12px}
+.env{display:flex;flex-direction:column;gap:5px}
+.envtop{display:flex;justify-content:space-between;gap:10px;font-size:14.5px}
+.envn{font-weight:600}
+.capbar.envbar span{background:var(--good)} .capbar.envbar.warn span{background:var(--warn)} .capbar.envbar.bad span{background:var(--bad)}
+.envtot{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:8px;font-weight:600}
+.envrows{display:flex;flex-direction:column;gap:8px}
+.envrow{display:grid;grid-template-columns:1fr 110px 38px;gap:8px;align-items:center}
+.envrow input{border:1px solid var(--line);background:var(--bg);border-radius:var(--r-s);padding:10px 12px;width:100%;min-width:0;font-size:16px}
+.envrow .hint{grid-column:1/-1;margin-top:-4px}
 .groups{display:flex;flex-direction:column;gap:8px}
 .grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;font-weight:600}
@@ -286,11 +301,12 @@ function compute(k){
   const opsIn=sum(ops.filter(o=>o.kind==="in"),o=>num(o.amount));
   const opsSave=sum(ops.filter(o=>o.kind==="save"),o=>num(o.amount));
   const outs=ops.filter(o=>o.kind==="out");
-  const life=sum(outs.filter(o=>LIFE.has(o.cat)),o=>num(o.amount));
-  const other=sum(outs.filter(o=>!LIFE.has(o.cat)),o=>num(o.amount));
+  const lifeOps=outs.filter(isLife);
+  const life=sum(lifeOps,o=>num(o.amount));
+  const other=sum(outs.filter(o=>!isLife(o)),o=>num(o.amount));
   const planned=accMonthly();
-  const inc=recIn+opsIn, save=planned+opsSave, budget=num(S.config.lifeBudget);
-  const lifeProj=budget>0?Math.max(life,budget):life;
+  const inc=recIn+opsIn, save=planned+opsSave, budget=lifePlan().total;
+  const lifeProj=life+lifeReserve(lifeOps,1).R;
   return {k,ops,recIn,recOut,opsIn,opsSave,life,other,planned,inc,save,budget,lifeProj,
     resteNow:inc-recOut-save-life-other, resteEst:inc-recOut-save-other-lifeProj};
 }
@@ -313,10 +329,10 @@ function flowFromStart(k,st,B){
         tout=sum(recs.filter(r=>r.kind==="transfer"&&bankOf(r)===B),ra)+sum(ops.filter(o=>o.kind==="transfer"&&bankOf(o)===B),am)}
   const save=sum(S.accounts.filter(a=>!done("acc:"+a.id,a.day)&&inB(a)),a=>num(a.monthly))+sum(ops.filter(o=>o.kind==="save"&&inB(o)),am);
   const outs=ops.filter(o=>o.kind==="out"&&inB(o));
-  const life=sum(outs.filter(o=>LIFE.has(o.cat)),am), other=sum(outs.filter(o=>!LIFE.has(o.cat)),am);
-  let allowance=0;
-  if(c.budget>0&&(!B||B===lifeBankId())){if(isStart){const {y,m}=pm(k),dim=new Date(y,m,0).getDate(),d0=num(st.date.slice(8,10));allowance=c.budget*(dim-d0+1)/dim}else allowance=c.budget}
-  const vari=other+Math.max(life,allowance);
+  const life=sum(outs.filter(isLife),am), other=sum(outs.filter(o=>!isLife(o)),am);
+  const {y,m}=pm(k),dim=new Date(y,m,0).getDate(),fr=isStart?(dim-num(st.date.slice(8,10))+1)/dim:1;
+  const res=lifeReserve(ops.filter(isLife),fr), allowance=res.total;
+  const vari=other+life+((!B||B===lifeBankId())?res.R:0);
   return {inc,fix,save,vari,tin,tout,net:inc+tin-fix-tout-save-vari,life,allowance};
 }
 /* Déjà passé au moment du point : coché (true), décoché explicitement (false), sinon déduit du jour du mois */
@@ -325,6 +341,32 @@ function pendingItems(st){const k=st.k,bn=x=>multi()?" · "+(x.kind==="transfer"
   return [...S.recurring.filter(r=>!isPassed(st,r.id,r.day)&&recAmount(r,k)>0).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
     ...S.accounts.filter(a=>num(a.monthly)>0&&!isPassed(st,"acc:"+a.id,a.day)).map(a=>({l:"Virement vers "+a.name+bn(a),a:num(a.monthly),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
+/* ---------- Vie courante : budget global détaillé en enveloppes ---------- */
+function envs(){return Array.isArray(S.config.envelopes)?S.config.envelopes.filter(e=>e&&e.id&&e.name):[]}
+function isLife(o){return o.kind==="out"&&(o.life===true||(o.life===undefined&&LIFE.has(o.cat)))}
+function envOf(o){const E=envs();if(o.env&&E.some(e=>e.id===o.env))return o.env;const n=norm(o.cat),m=E.find(e=>norm(e.name)===n);return m?m.id:"autres"}
+function envName(id){const e=envs().find(x=>x.id===id);return e?e.name:(envs().length?"Autres dépenses courantes":"Vie courante")}
+function lifePlan(){const E=envs(),sumE=sum(E,e=>num(e.amount)),B=num(S.config.lifeBudget),total=Math.max(B,sumE);return {E,sumE,B,total,autres:Math.max(0,total-sumE),over:B>0&&sumE>B}}
+// Réservation : chaque enveloppe réserve son montant (× part du mois restante) ; un dépassement s'ajoute, il n'est pas compensé par une autre enveloppe
+function lifeReserve(ops,f){const L=lifePlan();
+  const rows=[...L.E.map(e=>({id:e.id,name:e.name,amt:num(e.amount)})),{id:"autres",name:envName("autres"),amt:L.autres}];
+  rows.forEach(r=>{r.spent=sum(ops.filter(o=>envOf(o)===r.id),o=>num(o.amount));r.alloc=r.amt*f;r.left=Math.max(0,r.alloc-r.spent)});
+  return {rows,spent:sum(ops,o=>num(o.amount)),R:sum(rows,r=>r.left),total:L.total*f}}
+// Moyennes réelles sur les 3 derniers mois complets ayant des dépenses courantes saisies
+function lifeAverages(){const months=[];for(let i=1;i<=3;i++){const k=addM(CUR,-i);const ops=S.ops.filter(o=>(o.date||"").slice(0,7)===k&&isLife(o));if(ops.length)months.push(ops)}
+  if(!months.length)return null;const ids=[...envs().map(e=>e.id),"autres"],by={};
+  ids.forEach(id=>{const v=months.map(ops=>sum(ops.filter(o=>envOf(o)===id),o=>num(o.amount)));by[id]={avg:sum(v,x=>x)/v.length,min:Math.min(...v),max:Math.max(...v)}});
+  const tot=months.map(ops=>sum(ops,o=>num(o.amount)));return {n:months.length,by,total:{avg:sum(tot,x=>x)/tot.length,min:Math.min(...tot),max:Math.max(...tot)}}}
+function todaySpend(){
+  const L=lifePlan();if(!(L.total>0))return null;
+  const st=startInfo(),k=CUR,isStart=!!(st&&st.k===k),{y,m}=pm(k),dim=new Date(y,m,0).getDate(),d=today.getDate(),daysLeft=dim-d+1;
+  let ops=S.ops.filter(o=>(o.date||"").slice(0,7)===k&&isLife(o));if(isStart)ops=ops.filter(o=>opCounted(o,st));
+  const f=isStart?(dim-num(st.date.slice(8,10))+1)/dim:1, res=lifeReserve(ops,f);
+  const spentToday=sum(ops.filter(o=>o.date===todayISO()),o=>num(o.amount));
+  const end=st&&k>=st.k?projBal(k):compute(k).resteEst, cashFree=end+res.R-num(S.config.cushion);
+  const budgetDay=(res.R+spentToday)/daysLeft-spentToday, cashDay=(cashFree+spentToday)/daysLeft-spentToday;
+  const byBudget=budgetDay<=cashDay, v=Math.min(budgetDay,cashDay);
+  return {v,byBudget,spentToday,daysLeft,perDay:Math.max(0,Math.min(res.R,cashFree)/daysLeft),res,cashFree,hasPoint:!!(st&&k>=st.k)}}
 function essentialsMonthly(){return sum(S.recurring.filter(r=>isOut(r)&&r.essential!==false&&activeNow(r)),monthlyEq)}
 function emergency(){
   const target=num(S.config.emergencyMonths)*(essentialsMonthly()+num(S.config.lifeBudget));
@@ -416,7 +458,10 @@ function alerts(k){
     else if(used>f+0.12&&c.life>0)A.push({lvl:"warn",t:`Tu dépenses plus vite que prévu`,p:`${pct(used)} du budget utilisé au jour ${d} sur ${dim}. À ce rythme : environ ${e0(c.life/d*dim)} sur le mois pour ${e0(c.budget)} prévus.`});
   }
   if(!st&&!readOnly)A.push({lvl:"info",t:"Pas encore de point de départ",p:"Indique ton solde actuel pour voir combien il restera vraiment sur ton compte.",act:"start",btn:"Faire le point"});
-  if(!(num(cfg.lifeBudget)>0))A.push({lvl:"warn",t:"Fixe ton budget vie courante",p:"Courses, carburant, sorties… Sans ce montant, le reste estimé ne compte que ce que tu as déjà saisi et paraît trop optimiste.",act:"settings",btn:"Régler"});
+  if(lifePlan().total>0){const r=lifeReserve(c.ops.filter(o=>o.kind==="out"&&isLife(o)),1);
+    r.rows.filter(x=>x.amt>0&&x.spent>x.amt).forEach(x=>A.push({lvl:"warn",t:`Enveloppe ${x.name} dépassée de ${e0(x.spent-x.amt)}`,p:`${e0(x.spent)} dépensés pour ${e0(x.amt)} prévus. Le dépassement est déduit de ton solde prévu.`,act:"budget",btn:"Budget"}));
+    const av=k===CUR?lifeAverages():null;if(av&&av.n>=2&&av.total.avg>lifePlan().total*1.1)A.push({lvl:"warn",t:`Budget vie courante trop bas ?`,p:`Sur ${av.n} mois, tu dépenses en moyenne ${e0(av.total.avg)} pour ${e0(lifePlan().total)} prévus. Ton solde prévu est probablement trop optimiste.`,act:"budget",btn:"Ajuster"})}
+  if(!(lifePlan().total>0))A.push({lvl:"warn",t:"Fixe ton budget vie courante",p:"Courses, carburant, sorties… Sans ce montant, le reste estimé ne compte que ce que tu as déjà saisi et paraît trop optimiste.",act:"budget",btn:"Régler"});
   (k===CUR?[k,addM(k,1),addM(k,2)]:[k]).forEach(kk=>duplicates(kk).forEach(({o,r})=>A.push({lvl:"warn",t:`Doublon possible : ${o.label} (${monthName(kk)})`,p:`${e2(num(o.amount))} est saisi en ponctuel alors que « ${r.label} » du même montant est déjà compté en récurrent ce mois-là.`,act:"op:"+o.id,btn:"Voir"})));
   accountMismatch().forEach(m=>A.push({lvl:"info",t:`Vérifie ${m.a.name}`,p:m.msg,act:"acc:"+m.a.id,btn:"Ouvrir"}));
   transferPairs().forEach(({i,o})=>A.push({lvl:"warn",t:`Virement compté deux fois ?`,p:`« ${i.label} » (entrée sur ${bankName(bankOf(i))}) et « ${o.label} » (sortie de ${bankName(bankOf(o))}) font ${e2(num(i.amount))}. Si c'est le même argent qui passe d'un compte à l'autre, ce n'est ni un revenu ni une dépense : fusionne-les en un virement.`,act:`merge:${o.id}|${i.id}`,btn:"Fusionner"}));
@@ -479,6 +524,7 @@ function viewMois(){
   ${!isCur?`<div style="text-align:center;margin-top:-10px"><button class="btn small" data-act="today">Revenir à ce mois-ci</button></div>`:""}
   ${!st&&!readOnly?`<section class="card" style="display:flex;flex-direction:column;gap:8px;border-color:var(--accent)"><h2>Fais le point sur ton compte</h2><p class="muted" style="margin:0">Indique combien tu as aujourd'hui sur ton compte courant et ce qui est déjà passé ce mois-ci. L'application calcule ensuite ton solde prévu, mois après mois.</p><div><button class="btn primary" data-act="start">Faire le point</button></div></section>`:""}
   ${st&&viewMonth<st.k?`<div class="banner">Ce mois est avant ton point de départ du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR")} : il est affiché sans solde de compte.</div>`:""}
+  ${isCur?todayCard():""}
   <section class="card hero">
     <div class="k">${useStart?`Solde prévu ${multi()?"sur tes comptes":"sur ton compte"} fin ${monthName(viewMonth,true)}`:past?"Il est resté en fin de mois":"Il devrait te rester en fin de mois"}</div>
     <div class="big ${v<0?"neg":""}">${e0(v)}</div>
@@ -497,10 +543,30 @@ function viewMois(){
     ${useStart&&viewMonth===st.k&&c.budget>0?`<div class="note" style="margin-top:6px">Vie courante d'ici la fin du mois : ${e0(f.allowance)} réservés (au prorata des jours restants), ${e0(f.life)} saisis depuis le point.</div>`:c.budget>0?`<div class="note" style="margin-top:6px">Dont vie courante : ${e0(c.life)} saisis sur un budget de ${e0(c.budget)}${c.lifeProj>c.life?` (le reste du budget est déjà réservé)`:""}.</div>`:""}
     ${isCur&&c.budget>0?gauge(c):""}
   </section>
+  ${envSection(viewMonth)}
   <section class="sec"><div class="sechead"><h2>Points d'attention</h2></div><div class="alerts">${A.length?A.map(alertHtml).join(""):`<div class="alert good"><span class="stripe"></span><div><b>Rien à signaler</b><p>Ton mois est équilibré.</p></div></div>`}</div></section>
   <section class="sec"><div class="sechead"><h2>Les 6 prochains mois</h2><span class="note">${startInfo()?"Solde prévu du compte en fin de mois":"Reste estimé en fin de mois"}</span></div><div class="card">${forecastChart()}</div></section>
   <section class="sec"><div class="sechead"><h2>Opérations du mois</h2></div>${opsList(c)}</section>`;
   return h;
+}
+function todayCard(){
+  const t=todaySpend();
+  if(!t)return readOnly?"":`<section class="card today"><div class="k">Dépensable aujourd'hui</div><p class="muted" style="margin:0">Règle ton budget vie courante (courses, essence, sorties…) pour savoir chaque jour combien tu peux dépenser sans te mettre dans le rouge.</p><div><button class="btn small primary" data-act="budget">Régler mon budget</button></div></section>`;
+  const v=Math.max(0,t.v), lvl=t.v<=0?"bad":t.v<5?"warn":"good";
+  return `<section class="card today ${lvl}"><div class="k">Tu peux dépenser aujourd'hui</div>
+    <div class="tbig ${t.v<=0?"neg":""}">${e0(v)}</div>
+    <div class="note">${t.v<=0?(t.byBudget&&t.res.R<=0?"Budget vie courante épuisé pour ce mois.":!t.byBudget&&t.cashFree<=0?"Ton compte ne permet plus de dépense courante ce mois-ci.":"Ta part du jour est déjà dépensée."):t.byBudget?"Limité par ton budget vie courante.":`Limité par ${t.hasPoint?"ton compte":"ton reste du mois"} (marge de ${e0(num(S.config.cushion))} gardée).`}
+    ${t.spentToday?` Déjà dépensé aujourd'hui : ${e0(t.spentToday)}.`:""} Ensuite environ <b>${e0(t.perDay)}/jour</b> pendant ${t.daysLeft} jour${t.daysLeft>1?"s":""}.</div></section>`;
+}
+function envSection(k){
+  const L=lifePlan();if(!(L.total>0))return "";
+  let ops=S.ops.filter(o=>(o.date||"").slice(0,7)===k&&isLife(o));
+  const res=lifeReserve(ops,1),A=k===CUR?lifeAverages():null;
+  const rows=res.rows.filter(r=>r.amt>0||r.spent>0);
+  return `<section class="sec"><div class="sechead"><h2>Budget vie courante</h2>${readOnly?"":`<button class="btn small" data-act="budget">Modifier</button>`}</div>
+  <div class="card envs">${rows.map(r=>{const p=r.amt>0?r.spent/r.amt:1,cls=r.spent>r.amt?"bad":p>=0.8?"warn":"";const a=A&&A.by[r.id];
+    return `<div class="env"><div class="envtop"><span class="envn">${esc(r.name)}</span><span class="num">${e0(r.spent)} / ${e0(r.amt)}</span></div><div class="capbar envbar ${cls}"><span style="width:${Math.min(100,p*100).toFixed(1)}%"></span></div>${r.spent>r.amt?`<div class="note" style="color:var(--bad)">Dépassé de ${e0(r.spent-r.amt)}</div>`:a&&a.avg>0?`<div class="note">moy. ${e0(a.avg)}${A.n>1?` (${e0(a.min)} à ${e0(a.max)})`:""} sur ${A.n} mois</div>`:""}</div>`}).join("")}
+  <div class="envtot"><span>Total</span><span class="num">${e0(res.spent)} / ${e0(L.total)}</span></div></div></section>`;
 }
 function gauge(c){
   const dim=new Date(today.getFullYear(),today.getMonth()+1,0).getDate(), f=today.getDate()/dim, u=Math.min(1,c.life/c.budget);
@@ -534,7 +600,7 @@ function opsList(c){
     return `<button class="row" data-act="recmonth:${x.r.id}"><div class="main"><div>${esc(x.r.label)}</div><div class="sub">${x.r.kind==="transfer"?"Virement entre comptes":esc(x.r.cat||"Sans catégorie")}${btag(x.r)}${ov?`<span class="tag warn">${ov.skip?"Pas ce mois-ci":"Modifié ce mois-ci"}</span>`:""}${smooth?`<span class="tag warn">Lissé : mois inconnu</span>`:""}${!has(x.r.amount)?`<span class="tag warn">Montant manquant</span>`:""}</div></div><div class="amt ${x.r.kind==="in"?"pos":x.r.kind==="transfer"?"sav":"neg"} ${ov&&ov.skip?"tag off":""}">${x.r.kind==="in"?"+":x.r.kind==="transfer"?"⇄ ":"−"}${e2(ov&&ov.skip?recAmount({...x.r,overrides:null},k):x.a)}</div></button>`};
   const accRows=S.accounts.filter(a=>num(a.monthly)>0).map(a=>`<button class="row" data-act="acc:${a.id}"><div class="main"><div>${esc(a.name)}</div><div class="sub">Versement programmé${btag(a)}</div></div><div class="amt sav">→ ${e2(num(a.monthly))}</div></button>`).join("");
   const opRow=o=>{const sign=o.kind==="in"?"+":o.kind==="save"?"→ ":o.kind==="transfer"?"⇄ ":"−";const acc=o.kind==="save"?S.accounts.find(a=>a.id===o.account):null;
-    return `<button class="row" data-act="op:${o.id}"><div class="main"><div>${esc(o.label||o.cat||"Opération")}</div><div class="sub">${new Date(o.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · ${o.kind==="transfer"?"Virement":esc(o.kind==="save"?(acc?acc.name:"Épargne"):o.cat||"")}${btag(o)}${o.kind==="out"&&LIFE.has(o.cat)?'<span class="tag">vie courante</span>':""}${!opCounted(o,startInfo())?'<span class="tag">avant le point, déjà dans le solde</span>':""}</div></div><div class="amt ${o.kind==="in"?"pos":o.kind==="save"||o.kind==="transfer"?"sav":"neg"}">${sign}${e2(num(o.amount))}</div></button>`};
+    return `<button class="row" data-act="op:${o.id}"><div class="main"><div>${esc(o.label||o.cat||"Opération")}</div><div class="sub">${new Date(o.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · ${o.kind==="transfer"?"Virement":esc(o.kind==="save"?(acc?acc.name:"Épargne"):o.cat||"")}${btag(o)}${isLife(o)?`<span class="tag">vie courante</span>`:o.kind==="out"?'<span class="tag">exceptionnel</span>':""}${!opCounted(o,startInfo())?'<span class="tag">avant le point, déjà dans le solde</span>':""}</div></div><div class="amt ${o.kind==="in"?"pos":o.kind==="save"||o.kind==="transfer"?"sav":"neg"}">${sign}${e2(num(o.amount))}</div></button>`};
   const none=t=>`<div class="row muted" style="cursor:default">${t}</div>`;
   const opsOut=sum(ops.filter(o=>o.kind==="out"),o=>num(o.amount));
   const cnt=(n,t)=>`${n} · ${e0(t)}`;
@@ -729,17 +795,23 @@ function catOptions(kind,cur){const L=kind==="in"?CAT_IN:CAT_OUT;const extra=cur
 function bankSel(name,cur,label,id,hidden){if(S.banks.length<1)return "";return `<div class="field" id="${id}F" ${hidden?"hidden":""}><label for="${id}" id="${id}L">${label}</label><select id="${id}" name="${name}">${S.banks.map(b=>`<option value="${b.id}" ${b.id===cur?"selected":""}>${esc(b.name)}</option>`).join("")}</select></div>`}
 const BANK_LBL={out:"Payé depuis",in:"Arrive sur",save:"Prélevé sur",transfer:"Depuis le compte"};
 function wireBankFields(f,kind){const L=f.querySelector("#bkL");if(L)L.textContent=BANK_LBL[kind]||"Compte";const T=f.querySelector("#toF");if(T)T.hidden=kind!=="transfer"}
+let lastEnv=null;
+function envOptions(cur){const E=envs();return [...E.map(e=>`<option value="${e.id}" ${e.id===cur?"selected":""}>${esc(e.name)}</option>`),`<option value="autres" ${cur==="autres"||!E.some(e=>e.id===cur)?"selected":""}>${esc(envName("autres"))}</option>`].join("")}
 function opSheet(o){
   const isNew=!o; o=o||{kind:"out",date:viewMonth===CUR?todayISO():viewMonth+"-01",cat:"",label:"",amount:""};
+  const nat0=o.kind!=="out"?"life":(isNew?"life":(isLife(o)?"life":"exc"));
+  const env0=isNew?(lastEnv||envs()[0]?.id||"autres"):envOf(o);
   sheet(isNew?"Nouvelle opération":"Opération",`
     ${seg("kind",[["out","Dépense"],["in","Entrée"],["save","Épargne"],...(multi()?[["transfer","Virement"]]:[])],o.kind)}
     ${multi()?`<p class="note" style="margin:-6px 0 0">Entre deux de tes comptes ? Choisis <b>Virement</b>.</p>`:""}
+    <div id="natF" ${o.kind==="out"?"":"hidden"}>${seg("nature",[["life","Vie courante"],["exc","Achat exceptionnel"]],nat0)}<p class="note" id="natHint" style="margin:6px 0 0"></p></div>
     <div class="field"><label for="opAmt">Montant (€)</label><input id="opAmt" name="amount" class="bigin" inputmode="decimal" value="${esc(o.amount)}" placeholder="0,00" required></div>
-    <div class="field"><label for="opLabel">Libellé</label><input id="opLabel" name="label" value="${esc(o.label)}" placeholder="ex. Courses Intermarché" maxlength="80"></div>
-    <div class="grid2"><div class="field" id="catF"><label for="opCat">Catégorie</label><select id="opCat" name="cat">${catOptions(o.kind,o.cat)}</select></div>
+    <div class="grid2"><div class="field" id="envF"><label for="opEnv">Enveloppe</label><select id="opEnv" name="env">${envOptions(env0)}</select></div>
+    <div class="field" id="catF"><label for="opCat">Catégorie</label><select id="opCat" name="cat">${catOptions(o.kind,o.cat)}</select></div>
     <div class="field" id="accF" ${o.kind==="save"?"":"hidden"}><label for="opAcc">Vers le compte</label><select id="opAcc" name="account">${S.accounts.map(a=>`<option value="${a.id}" ${a.id===o.account?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
     <div class="field"><label for="opDate">Date</label><input id="opDate" type="date" name="date" value="${esc(o.date)}" required></div>
     ${bankSel("bank",o.bank||lastBank||defBank(),BANK_LBL[o.kind]||"Compte","bk")}${multi()?bankSel("to",o.to||S.banks.find(b=>b.id!==(o.bank||lastBank||defBank()))?.id,"Vers le compte","to",o.kind!=="transfer"):""}</div>
+    <div class="field"><label for="opLabel">Libellé (facultatif)</label><input id="opLabel" name="label" value="${esc(o.label)}" placeholder="ex. Leclerc, Total…" maxlength="80"></div>
     <div class="actions">${isNew?"":delBtn("op")}<button class="btn primary">${isNew?"Ajouter":"Enregistrer"}</button></div>`,
   async fd=>{
     const kind=fd.get("kind"),amount=req(fd.get("amount"),"Indique un montant supérieur à 0.");
@@ -748,9 +820,18 @@ function opSheet(o){
     if(doc.bank)lastBank=doc.bank;
     if(kind==="transfer"){doc.to=fd.get("to")||null;if(!doc.to||doc.to===bankOf(doc))throw new Error("Choisis deux comptes différents.")}
     else if(kind==="save"){doc.account=fd.get("account")||"";if(!doc.account)throw new Error("Ajoute d'abord un compte d'épargne.")}
-    else if(!doc.cat)throw new Error("Choisis une catégorie.");
+    else if(kind==="out"&&fd.get("nature")==="life"){doc.life=true;doc.env=fd.get("env")||"autres";doc.cat=envName(doc.env);lastEnv=doc.env}
+    else{if(kind==="out")doc.life=false;if(!doc.cat)throw new Error("Choisis une catégorie.")}
     await put("ops",o.id||uid(),doc);toast(isNew?"Opération ajoutée":"Enregistré");
-  },f=>{wireSeg(f,(n,v)=>{f.querySelector("#accF").hidden=v!=="save";f.querySelector("#catF").hidden=v==="save"||v==="transfer";f.querySelector("#opCat").innerHTML=catOptions(v,"");wireBankFields(f,v)});f.querySelector("#catF").hidden=o.kind==="save"||o.kind==="transfer";wireDel(f,()=>del("ops",o.id))});
+  },f=>{
+    const sync=()=>{const kind=f.querySelector('input[name="kind"]').value,nat=f.querySelector('input[name="nature"]').value,life=kind==="out"&&nat==="life";
+      f.querySelector("#natF").hidden=kind!=="out";
+      f.querySelector("#envF").hidden=!life;
+      f.querySelector("#catF").hidden=life||kind==="save"||kind==="transfer";
+      f.querySelector("#accF").hidden=kind!=="save";
+      const h=f.querySelector("#natHint");if(h)h.textContent=nat==="life"?"Courses, essence, sorties… : dépenses qui reviennent chaque mois, comptées dans ton budget vie courante.":"Achat ponctuel hors budget du quotidien : il s'ajoute aux sorties du mois.";
+      wireBankFields(f,kind)};
+    wireSeg(f,(n,v)=>{if(n==="kind")f.querySelector("#opCat").innerHTML=catOptions(v,"");sync()});sync();wireDel(f,()=>del("ops",o.id))});
 }
 function recSheet(r){
   const isNew=!r; r=r||{kind:"out",freq:"mensuel",essential:true,label:"",amount:"",cat:""};
@@ -861,11 +942,33 @@ function bankSheet(b){
     await put("banks",b.id||uid(),{name,order:b.order||Date.now()});toast(isNew?"Compte ajouté":"Enregistré")},
   f=>wireDel(f,()=>del("banks",b.id)));
 }
+function budgetSheet(){
+  const L=lifePlan(),A=lifeAverages();
+  const E=L.E.length?L.E:[{id:uid(),name:"Courses",amount:""},{id:uid(),name:"Essence",amount:""}];
+  const avg=id=>A&&A.by[id]&&A.by[id].avg>0?`<span class="hint">moy. ${e0(A.by[id].avg)}${A.n>1?` (${e0(A.by[id].min)} à ${e0(A.by[id].max)})`:""} sur ${A.n} mois</span>`:"";
+  const row=e=>`<div class="envrow" data-id="${esc(e.id)}"><input aria-label="Nom de l'enveloppe" class="envname" value="${esc(e.name)}" maxlength="30" placeholder="ex. Courses"><input aria-label="Montant mensuel" class="envamt" inputmode="decimal" value="${esc(e.amount??"")}" placeholder="€/mois"><button type="button" class="iconbtn envdel" aria-label="Retirer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>${avg(e.id)}</div>`;
+  sheet("Budget vie courante",`
+    <div class="field"><label for="bTot">Budget total par mois (€)</label><input id="bTot" name="total" inputmode="decimal" value="${esc(S.config.lifeBudget??"")}" placeholder="ex. 650"><span class="hint">Tout ce que tu dépenses hors charges fixes. Il est réservé dans ton solde prévu.</span>${A?`<span class="hint">Réel : moy. ${e0(A.total.avg)}${A.n>1?` (${e0(A.total.min)} à ${e0(A.total.max)})`:""} sur ${A.n} mois</span>`:""}</div>
+    <div class="field"><label>Enveloppes (facultatif)</label><span class="hint">Détaille le budget : ce qui n'est pas dans une enveloppe va dans « Autres dépenses courantes ».</span><div id="envRows" class="envrows">${E.map(row).join("")}</div>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" id="envAdd">+ Ajouter une enveloppe</button>${A?`<button type="button" class="btn small" id="envAvg">Utiliser les moyennes</button>`:""}</div></div>
+    <div class="banner" id="envSum"></div>
+    <div class="actions"><button class="btn primary">Enregistrer</button></div>`,
+  async (fd,f)=>{const envelopes=[...f.querySelectorAll(".envrow")].map(r=>({id:r.dataset.id,name:r.querySelector(".envname").value.trim(),amount:has(r.querySelector(".envamt").value)?Math.round(num(r.querySelector(".envamt").value)*100)/100:null})).filter(e=>e.name&&e.amount!==null);
+    const tot=fd.get("total");await putConfig({...S.config,lifeBudget:has(tot)?num(tot):null,envelopes});toast("Budget enregistré")},
+  f=>{const upd=()=>{const t=num(f.querySelector("#bTot").value),se=sum([...f.querySelectorAll(".envamt")],i=>num(i.value));
+      f.querySelector("#envSum").innerHTML=se>t&&t>0?`Tes enveloppes (${e0(se)}) dépassent le total (${e0(t)}) : c'est leur somme qui sera réservée.`:`Enveloppes ${e0(se)} · Autres dépenses courantes <b>${e0(Math.max(0,t-se))}</b> · Total réservé <b>${e0(Math.max(t,se))}</b>/mois`};
+    f.addEventListener("input",upd);
+    f.querySelector("#envRows").addEventListener("click",e=>{const b=e.target.closest(".envdel");if(b){b.closest(".envrow").remove();upd()}});
+    f.querySelector("#envAdd").addEventListener("click",()=>{f.querySelector("#envRows").insertAdjacentHTML("beforeend",row({id:uid(),name:"",amount:""}));f.querySelector("#envRows .envrow:last-child .envname").focus();upd()});
+    f.querySelector("#envAvg")?.addEventListener("click",()=>{f.querySelectorAll(".envrow").forEach(r=>{const a=A.by[r.dataset.id];if(a&&a.avg>0)r.querySelector(".envamt").value=Math.ceil(a.avg/10)*10});
+      if(A.total.avg>0&&!(num(f.querySelector("#bTot").value)>=A.total.avg))f.querySelector("#bTot").value=Math.ceil(A.total.avg/10)*10;upd()});
+    upd()});
+}
 function settingsSheet(){
   const c=S.config;
   sheet("Réglages",`
     <div class="grid2">
-      <div class="field"><label for="sLife">Budget vie courante (€/mois)</label><input id="sLife" name="lifeBudget" inputmode="decimal" value="${esc(c.lifeBudget??"")}"><span class="hint">Courses, carburant, sorties, santé… Ce que tu dépenses hors charges fixes.</span></div>
+      <div class="field"><label for="sLife">Budget vie courante (€/mois)</label><input id="sLife" name="lifeBudget" inputmode="decimal" value="${esc(c.lifeBudget??"")}"><span class="hint">Courses, carburant, sorties… Détaille-le en enveloppes dans l'onglet Mois.</span></div>
       ${multi()?bankSel("lifeBank",lifeBankId(),"Vie courante payée depuis","sLb"):""}
       <div class="field"><label for="sCush">Marge de sécurité (€)</label><input id="sCush" name="cushion" inputmode="decimal" value="${esc(c.cushion??"")}"><span class="hint">En dessous, le mois est signalé « marge faible ».</span></div>
       <div class="field"><label for="sAge">Âge</label><input id="sAge" name="age" inputmode="numeric" value="${esc(c.age??"")}"></div>
@@ -1026,6 +1129,7 @@ document.addEventListener("click",e=>{
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
   else if(k==="export")exportJson();
+  else if(k==="budget"){if(readOnly)toast("Lecture seule");else budgetSheet()}
   else if(k==="migrate"){const d=api.migrate;api.migrate=null;if(d){S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};importAll(d).then(()=>toast("Données envoyées vers ton compte"))}}
   else if(k==="start"){if(readOnly)toast("Lecture seule");else startSheet()}
   else if(k==="merge"){if(readOnly)toast("Lecture seule");else{const [oid,iid]=id.split("|");mergeTransfer(oid,iid).catch(x=>toast(x.message))}}
