@@ -374,16 +374,16 @@ function pendingItems(st){const k=st.k,bn=x=>multi()?" · "+(x.kind==="transfer"
   return [...S.recurring.filter(r=>!isPassed(st,r.id,r.day)&&recAmount(r,k)>0).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
     ...S.accounts.filter(a=>accAmt(a,k)>0&&!isPassed(st,"acc:"+a.id,a.day)).map(a=>({l:"Virement vers "+a.name+bn(a),a:accAmt(a,k),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
 function balanceOn(date,B){const st=startInfo();if(!st||date<st.date)return null;
-  const d0=num(st.date.slice(8,10)),inB=x=>!B||bankOf(x)===B;let b=B?num(st.balances[B]):st.total,undated=0;const items=[],und=[];const add=(l,v,dt)=>{b+=v;items.push({l,v,dt})};
+  const d0=num(st.date.slice(8,10)),inB=x=>!B||bankOf(x)===B;let b=B?num(st.balances[B]):st.total,undated=0;const items=[],und=[];const add=(l,v,dt,key)=>{b+=v;items.push({l,v,dt,key:isSt0(dt)?key:null})},isSt0=dt=>dt&&dt.slice(0,7)===st.k;
   for(let m=st.k;m<=date.slice(0,7);m=addM(m,1)){const {y,m:mm}=pm(m),dim=new Date(y,mm,0).getDate(),last=m===date.slice(0,7)?num(date.slice(8,10)):dim,isSt=m===st.k;
     const inWin=(key,day,lbl,v)=>{if(isSt&&isPassed(st,key,day))return false;if(!has(day)){undated++;und.push({l:lbl,v});return false}const dd=Math.min(dim,num(day));return (!isSt||dd>d0)&&dd<=last};
     const dt=day=>m+"-"+String(Math.min(dim,num(day))).padStart(2,"0");
     S.recurring.forEach(r=>{const a=recAmount(r,m);if(!a)return;
       const mine=r.kind==="transfer"?(!B||bankOf(r)===B||toOf(r)===B):inB(r);
       if(!inWin(r.id,r.day,r.label,mine&&r.kind!=="transfer"?(r.kind==="in"?a:-a):0))return;
-      if(r.kind==="transfer"){if(!B)return;if(bankOf(r)===B)add(r.label+" → "+bankName(toOf(r)),-a,dt(r.day));if(toOf(r)===B)add(r.label+" ← "+bankName(bankOf(r)),a,dt(r.day));return}
-      if(!inB(r))return;add(r.label,r.kind==="in"?a:-a,dt(r.day))});
-    S.accounts.forEach(a=>{const v=accAmt(a,m);if(v&&inB(a)&&inWin("acc:"+a.id,a.day,"Virement vers "+a.name,-v))add("Virement vers "+a.name,-v,dt(a.day))});
+      if(r.kind==="transfer"){if(!B)return;if(bankOf(r)===B)add(r.label+" → "+bankName(toOf(r)),-a,dt(r.day),r.id);if(toOf(r)===B)add(r.label+" ← "+bankName(bankOf(r)),a,dt(r.day),r.id);return}
+      if(!inB(r))return;add(r.label,r.kind==="in"?a:-a,dt(r.day),r.id)});
+    S.accounts.forEach(a=>{const v=accAmt(a,m);if(v&&inB(a)&&inWin("acc:"+a.id,a.day,"Virement vers "+a.name,-v))add("Virement vers "+a.name,-v,dt(a.day),"acc:"+a.id)});
     S.ops.filter(o=>(o.date||"").slice(0,7)===m&&o.date<=date&&opCounted(o,st)).forEach(o=>{const v=num(o.amount),l=o.label||o.cat||"Opération";
       if(o.kind==="transfer"){if(!B)return;if(bankOf(o)===B)add(l+" → "+bankName(toOf(o)),-v,o.date);if(toOf(o)===B)add(l+" ← "+bankName(bankOf(o)),v,o.date);return}
       if(!inB(o))return;add(l,o.kind==="in"||o.kind==="withdraw"?v:-v,o.date)})}
@@ -392,10 +392,13 @@ function todaySheet(B){const r=balanceOn(todayISO(),B==="all"?null:B);if(!r)retu
   sheet(`Aujourd'hui${B!=="all"&&multi()?" · "+bankName(B):""}`,`<p class="muted" style="margin:0">Ce que ta banque devrait afficher, ligne par ligne. Compare avec ton relevé : la ligne qui n'y apparaît pas encore explique l'écart.</p>
     <div class="list">
       <div class="row" style="cursor:default"><div class="main"><div>Solde au point</div><div class="sub">${new Date(r.stDate+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</div></div><span class="num">${e2(r.start)}</span></div>
-      ${r.items.map(x=>`<div class="row" style="cursor:default"><div class="main"><div>${esc(x.l)}</div><div class="sub">${new Date(x.dt+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</div></div><span class="num ${x.v>0?"pos":""}">${x.v>0?"+":"−"}${e2(Math.abs(x.v))}</span></div>`).join("")||`<div class="row muted" style="cursor:default">Rien n'est passé depuis le point.</div>`}
+      ${r.items.map(x=>`<div class="row" style="cursor:default"><div class="main"><div>${esc(x.l)}</div><div class="sub">${new Date(x.dt+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}${x.key&&!readOnly?`<button type="button" class="chip" data-incl="${esc(x.key)}">Déjà dans le solde du point</button>`:""}</div></div><span class="num ${x.v>0?"pos":""}">${x.v>0?"+":"−"}${e2(Math.abs(x.v))}</span></div>`).join("")||`<div class="row muted" style="cursor:default">Rien n'est passé depuis le point.</div>`}
       <div class="row" style="cursor:default;font-weight:700"><div class="main"><div>= Aujourd'hui (théorique)</div></div><span class="num">${e2(r.v)}</span></div>
     </div>
-    ${r.und.length?`<p class="note" style="margin:0"><b>Non comptées, faute de jour du mois :</b> ${r.und.map(x=>`${esc(x.l)} (${x.v>0?"+":"−"}${e2(Math.abs(x.v))})`).join(", ")}. Si l'une est déjà passée, ajoute son jour dans Fixes.</p>`:""}`,async()=>false)}
+    ${r.und.length?`<p class="note" style="margin:0"><b>Non comptées, faute de jour du mois :</b> ${r.und.map(x=>`${esc(x.l)} (${x.v>0?"+":"−"}${e2(Math.abs(x.v))})`).join(", ")}. Si l'une est déjà passée, ajoute son jour dans Fixes.</p>`:""}
+    <p class="note" style="margin:0">« Déjà dans le solde du point » : la ligne était débitée avant ton point, elle ne doit pas être retirée une seconde fois. Pense aussi à corriger son jour dans Fixes.</p>`,async()=>false,
+  f=>f.querySelectorAll("[data-incl]").forEach(btn=>btn.addEventListener("click",async()=>{const st=S.config.start;if(!st)return;
+    await putConfig({...S.config,start:{...st,passed:{...(st.passed||{}),[btn.dataset.incl]:true}}});toast("Compté comme déjà passé au point");todaySheet(B)})))}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
 /* ---------- Vie courante : budget global détaillé en enveloppes ---------- */
 function envs(){return Array.isArray(S.config.envelopes)?S.config.envelopes.filter(e=>e&&e.id&&e.name):[]}
