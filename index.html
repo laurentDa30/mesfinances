@@ -220,6 +220,7 @@ details summary{cursor:pointer;font-weight:600}
 .banks.four .bankrow{grid-template-columns:minmax(0,1fr) auto auto auto;gap:4px 10px}
 .banks.four .bankrow>*:not(:first-child){min-width:62px}
 .today-col{font-weight:600;color:var(--accent)}
+.linkbtn{background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-size:inherit;text-align:right}
 .bankrow>*:not(:first-child){text-align:right;min-width:72px}
 .bankhead{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 .negt{color:var(--bad)}
@@ -373,17 +374,28 @@ function pendingItems(st){const k=st.k,bn=x=>multi()?" · "+(x.kind==="transfer"
   return [...S.recurring.filter(r=>!isPassed(st,r.id,r.day)&&recAmount(r,k)>0).map(r=>({l:r.label+bn(r),a:recAmount(r,k),s:r.kind==="in"?"+":r.kind==="transfer"?"⇄ ":"−",d:r.day})),
     ...S.accounts.filter(a=>accAmt(a,k)>0&&!isPassed(st,"acc:"+a.id,a.day)).map(a=>({l:"Virement vers "+a.name+bn(a),a:accAmt(a,k),s:"→ ",d:a.day}))].sort((x,y)=>(y.a-x.a))}
 function balanceOn(date,B){const st=startInfo();if(!st||date<st.date)return null;
-  const d0=num(st.date.slice(8,10)),inB=x=>!B||bankOf(x)===B;let b=B?num(st.balances[B]):st.total,undated=0;
+  const d0=num(st.date.slice(8,10)),inB=x=>!B||bankOf(x)===B;let b=B?num(st.balances[B]):st.total,undated=0;const items=[],und=[];const add=(l,v,dt)=>{b+=v;items.push({l,v,dt})};
   for(let m=st.k;m<=date.slice(0,7);m=addM(m,1)){const {y,m:mm}=pm(m),dim=new Date(y,mm,0).getDate(),last=m===date.slice(0,7)?num(date.slice(8,10)):dim,isSt=m===st.k;
-    const inWin=(key,day)=>{if(isSt&&isPassed(st,key,day))return false;if(!has(day)){undated++;return false}const dd=Math.min(dim,num(day));return (!isSt||dd>d0)&&dd<=last};
-    S.recurring.forEach(r=>{const a=recAmount(r,m);if(!a||!inWin(r.id,r.day))return;
-      if(r.kind==="transfer"){if(!B)return;if(bankOf(r)===B)b-=a;if(toOf(r)===B)b+=a;return}
-      if(!inB(r))return;b+=r.kind==="in"?a:-a});
-    S.accounts.forEach(a=>{const v=accAmt(a,m);if(v&&inB(a)&&inWin("acc:"+a.id,a.day))b-=v});
-    S.ops.filter(o=>(o.date||"").slice(0,7)===m&&o.date<=date&&opCounted(o,st)).forEach(o=>{const v=num(o.amount);
-      if(o.kind==="transfer"){if(!B)return;if(bankOf(o)===B)b-=v;if(toOf(o)===B)b+=v;return}
-      if(!inB(o))return;b+=o.kind==="in"||o.kind==="withdraw"?v:-v})}
-  return {v:b,undated}}
+    const inWin=(key,day,lbl,v)=>{if(isSt&&isPassed(st,key,day))return false;if(!has(day)){undated++;und.push({l:lbl,v});return false}const dd=Math.min(dim,num(day));return (!isSt||dd>d0)&&dd<=last};
+    const dt=day=>m+"-"+String(Math.min(dim,num(day))).padStart(2,"0");
+    S.recurring.forEach(r=>{const a=recAmount(r,m);if(!a)return;
+      const mine=r.kind==="transfer"?(!B||bankOf(r)===B||toOf(r)===B):inB(r);
+      if(!inWin(r.id,r.day,r.label,mine&&r.kind!=="transfer"?(r.kind==="in"?a:-a):0))return;
+      if(r.kind==="transfer"){if(!B)return;if(bankOf(r)===B)add(r.label+" → "+bankName(toOf(r)),-a,dt(r.day));if(toOf(r)===B)add(r.label+" ← "+bankName(bankOf(r)),a,dt(r.day));return}
+      if(!inB(r))return;add(r.label,r.kind==="in"?a:-a,dt(r.day))});
+    S.accounts.forEach(a=>{const v=accAmt(a,m);if(v&&inB(a)&&inWin("acc:"+a.id,a.day,"Virement vers "+a.name,-v))add("Virement vers "+a.name,-v,dt(a.day))});
+    S.ops.filter(o=>(o.date||"").slice(0,7)===m&&o.date<=date&&opCounted(o,st)).forEach(o=>{const v=num(o.amount),l=o.label||o.cat||"Opération";
+      if(o.kind==="transfer"){if(!B)return;if(bankOf(o)===B)add(l+" → "+bankName(toOf(o)),-v,o.date);if(toOf(o)===B)add(l+" ← "+bankName(bankOf(o)),v,o.date);return}
+      if(!inB(o))return;add(l,o.kind==="in"||o.kind==="withdraw"?v:-v,o.date)})}
+  return {v:b,undated,items:items.sort((x,y)=>x.dt.localeCompare(y.dt)),und:und.filter(x=>x.v),start:B?num(st.balances[B]):st.total,stDate:st.date}}
+function todaySheet(B){const r=balanceOn(todayISO(),B==="all"?null:B);if(!r)return;
+  sheet(`Aujourd'hui${B!=="all"&&multi()?" · "+bankName(B):""}`,`<p class="muted" style="margin:0">Ce que ta banque devrait afficher, ligne par ligne. Compare avec ton relevé : la ligne qui n'y apparaît pas encore explique l'écart.</p>
+    <div class="list">
+      <div class="row" style="cursor:default"><div class="main"><div>Solde au point</div><div class="sub">${new Date(r.stDate+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</div></div><span class="num">${e2(r.start)}</span></div>
+      ${r.items.map(x=>`<div class="row" style="cursor:default"><div class="main"><div>${esc(x.l)}</div><div class="sub">${new Date(x.dt+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</div></div><span class="num ${x.v>0?"pos":""}">${x.v>0?"+":"−"}${e2(Math.abs(x.v))}</span></div>`).join("")||`<div class="row muted" style="cursor:default">Rien n'est passé depuis le point.</div>`}
+      <div class="row" style="cursor:default;font-weight:700"><div class="main"><div>= Aujourd'hui (théorique)</div></div><span class="num">${e2(r.v)}</span></div>
+    </div>
+    ${r.und.length?`<p class="note" style="margin:0"><b>Non comptées, faute de jour du mois :</b> ${r.und.map(x=>`${esc(x.l)} (${x.v>0?"+":"−"}${e2(Math.abs(x.v))})`).join(", ")}. Si l'une est déjà passée, ajoute son jour dans Fixes.</p>`:""}`,async()=>false)}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
 /* ---------- Vie courante : budget global détaillé en enveloppes ---------- */
 function envs(){return Array.isArray(S.config.envelopes)?S.config.envelopes.filter(e=>e&&e.id&&e.name):[]}
@@ -611,7 +623,7 @@ function viewMois(){
     <div class="k">${useStart?`Solde prévu ${multi()?"sur tes comptes":"sur ton compte"} fin ${monthName(viewMonth,true)}`:past?"Il est resté en fin de mois":"Il devrait te rester en fin de mois"}</div>
     <div class="big ${v<0?"neg":""}">${e0(v)}</div>
     <span class="pill ${status[0]}">${status[1]}</span>
-    ${perBank.length?`<div class="banks ${showToday?"four":""}"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span>${showToday?`<span class="num">aujourd'hui</span>`:""}<span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span>${showToday?`<span class="num today-col ${x.now.v<0?"negt":""}">${e0(x.now.v)}</span>`:""}<b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}${showToday?`<p class="note" style="margin:4px 0 0">« Aujourd'hui » : ce que ta banque devrait afficher si tout est saisi (point + prélèvements datés et opérations passés depuis). Un écart = une dépense ou une rentrée oubliée${nowTot.undated?`, ou une des ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour du mois`:""}.</p>`:""}</div>`:showToday&&nowTot?`<div class="note" style="margin-top:4px">Aujourd'hui sur ton compte (théorique) : <b class="num">${e0(nowTot.v)}</b>${nowTot.undated?` · ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour non comptée${nowTot.undated>1?"s":""}`:""}</div>`:""}
+    ${perBank.length?`<div class="banks ${showToday?"four":""}"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span>${showToday?`<span class="num">aujourd'hui</span>`:""}<span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span>${showToday?`<button type="button" class="num today-col linkbtn ${x.now.v<0?"negt":""}" data-act="todaydet:${x.b.id}" aria-label="Détail du calcul pour ${esc(x.b.name)}">${e0(x.now.v)}</button>`:""}<b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}${showToday?`<p class="note" style="margin:4px 0 0">« Aujourd'hui » : ce que ta banque devrait afficher si tout est saisi (point + prélèvements datés et opérations passés depuis). Touche un montant pour voir le détail. Un écart = une dépense ou une rentrée oubliée${nowTot.undated?`, ou une des ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour du mois`:""}.</p>`:""}</div>`:showToday&&nowTot?`<div class="note" style="margin-top:4px">Aujourd'hui sur ton compte (théorique) : <button type="button" class="num today-col linkbtn" data-act="todaydet:all">${e0(nowTot.v)}</button>${nowTot.undated?` · ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour non comptée${nowTot.undated>1?"s":""}`:""}</div>`:""}
     <div class="flow" role="img" aria-label="Répartition des entrées du mois">${seg(f.fix,"c-fix")}${seg(f.save,"c-save")}${seg(f.vari,"c-var")}${seg(Math.max(0,f.net),"c-rest")}${seg(over,"c-over")}</div>
     <div class="legend">
       <div><i class="c-fix"></i>${inStart?"Charges encore à venir":"Charges fixes"}<b>${e0(f.fix)}</b></div>
@@ -1467,6 +1479,7 @@ document.addEventListener("click",e=>{
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
   else if(k==="export")exportJson();
+  else if(k==="todaydet")todaySheet(id);
   else if(k==="sim")simSheet();
   else if(k==="simapply"){const a=S.accounts.find(x=>x.id===sim.acc);if(a){const m=Math.round(num(sim.monthly)*100)/100;put("accounts",a.id,{...strip(a),monthly:m}).then(()=>{toast(`${a.name} : ${e0(m)}/mois`);updateSim()}).catch(x=>toast(x.message))}}
   else if(k==="simopen"){const pre={monthly:Math.round(num(sim.monthly)*100)/100,rate:num(sim.rate),cap:null,balance:has(sim.once)&&num(sim.once)>0?num(sim.once):""};closeSheet();accSheet(null,pre)}
