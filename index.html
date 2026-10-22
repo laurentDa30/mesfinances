@@ -135,6 +135,26 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .authcard a{color:var(--accent)} .authcard .seg button{font-size:13.5px}
 .reckey{font-family:var(--f-num);font-size:19px;letter-spacing:.05em;background:var(--sunk);padding:14px;border-radius:var(--r-s);text-align:center;word-break:break-all;user-select:all;-webkit-user-select:all}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.modebtn{display:flex;align-items:center;gap:5px;background:none;border:0;padding:2px 0;margin:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.modebtn:disabled{cursor:default}.modebtn small{font-size:12px;color:var(--muted);font-weight:500;font-family:var(--f-body)}
+.modebtn:not(:disabled) small{text-decoration:underline dotted;text-underline-offset:3px}
+.modeico{width:8px;height:8px;border-radius:50%;flex:none;display:none}
+.modeico.m-local{display:block;background:var(--warn)} .modeico.m-sync{display:block;background:var(--good)}
+.cmpwrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-s)}
+.cmp{width:100%;border-collapse:collapse;font-size:13.5px}
+.cmp th,.cmp td{padding:8px 10px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.cmp thead th{border-top:0;background:var(--sunk);font-size:13px}
+.cmp tbody th{font-weight:600;color:var(--muted);width:32%}
+.cmp .cur{background:var(--accent-soft)}
+.curtag{display:block;font-size:11px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.05em}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bkbtns{display:flex;flex-direction:column;gap:10px}
+.bkbig{display:flex;align-items:center;gap:14px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:14px 16px;cursor:pointer;font:inherit}
+.bkbig.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.bkbig svg{width:24px;height:24px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
+.bkbig span{display:flex;flex-direction:column}.bkbig small{opacity:.8;font-size:13px}
+.bkbig:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.orline{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.orline::before,.orline::after{content:"";flex:1;border-top:1px solid var(--line)}
 .calentry{display:flex;align-items:center;gap:12px}
 .calentry h2{font-size:16px;margin-bottom:2px}
 .daychip{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-family:var(--f-num);font-size:13px;font-weight:600}
@@ -236,7 +256,8 @@ details summary{cursor:pointer;font-weight:600}
 <header class="top">
   <div class="wrap">
     <div class="bar">
-      <div class="brand">Comptes du foyer<small id="modeLbl">Chargement…</small></div>
+      <div class="brand">Comptes du foyer<button type="button" class="modebtn" id="modeBtn" data-act="storage"><span class="modeico" id="modeIco" aria-hidden="true"></span><small id="modeLbl">Chargement…</small></button></div>
+      <button class="iconbtn" id="btnBackup" aria-label="Sauvegarde" data-act="backup" hidden><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
       <button class="iconbtn" id="btnSettings" aria-label="Réglages" data-act="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     </div>
     <nav class="tabs" role="tablist">
@@ -576,18 +597,19 @@ function alerts(k){
 const $=s=>document.querySelector(s);
 function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===tab)));
-  $("#modeLbl").textContent=mode==="db"?(readOnly?"Lecture seule":"Enregistré automatiquement"):mode==="api"?(api.error?"Erreur de synchronisation":api.queue.length?(api.online?"Synchronisation…":`Hors ligne · ${api.queue.length} en attente`):(api.online?"Synchronisé":"Hors ligne")):mode==="local"?"Enregistré sur cet appareil":mode==="demo"?"Données d'exemple":"Chargement…";
+  $("#modeIco").className="modeico "+(mode==="api"?"m-sync":mode==="local"?"m-local":"");$("#modeBtn").disabled=!["api","local"].includes(mode);
+  $("#modeLbl").textContent=mode==="local"?"Sur cet appareil uniquement":mode==="api"&&!api.error&&!api.queue.length&&api.online?"Synchronisé · chiffré":mode==="db"?(readOnly?"Lecture seule":"Enregistré automatiquement"):mode==="api"?(api.error?"Erreur de synchronisation":api.queue.length?(api.online?"Synchronisation…":`Hors ligne · ${api.queue.length} en attente`):(api.online?"Synchronisé":"Hors ligne")):mode==="local"?"Enregistré sur cet appareil":mode==="demo"?"Données d'exemple":"Chargement…";
   if(mode==="loading")return;
   const authMode=["auth","unlock","recovery"].includes(mode);
-  document.querySelector("nav.tabs").hidden=authMode;$("#btnSettings").hidden=authMode;
-  if(authMode){$("#modeLbl").textContent="Budget chiffré de bout en bout";$("#main").innerHTML=authView();$("#fabs")?.remove();return}
+  document.querySelector("nav.tabs").hidden=authMode;$("#btnSettings").hidden=authMode;$("#btnBackup").hidden=authMode||!["local","api"].includes(mode);
+  if(authMode){$("#modeLbl").textContent="Ton budget, sans pub ni revente";$("#modeIco").className="modeico";$("#modeBtn").disabled=true;$("#main").innerHTML=authView();$("#fabs")?.remove();return}
   const m=$("#main");
   let html="";
   if(mode==="api"&&api.migrate)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Cet appareil contient des données de l'ancienne version, non chiffrées. Les importer dans ton compte ?</span><button class="btn small primary" data-act="migrate">Importer</button><button class="btn small" data-act="migrateskip">Ignorer</button></div>`;
   if(mode==="api"&&api.error)html+=`<div class="banner" style="background:var(--bad-soft)"><b>Le serveur ne répond pas correctement</b> : ${esc(api.error)}. Rien n'est enregistré en ligne pour l'instant ; tes modifications restent sur cet appareil et partiront dès que le problème sera réglé.</div>`;
   if(mode==="demo")html+=`<div class="banner"><b>Exemple.</b> Ces chiffres sont fictifs. Ouvre la page depuis Claude pour retrouver tes propres comptes.</div>`;
   if(mode==="local"&&(S.recurring.length||S.accounts.length)){const le=S.config.lastExport, age=le?Math.round((today-new Date(le+"T12:00"))/864e5):null;
-    if(age===null||age>30)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Tes données sont uniquement sur cet appareil. ${age===null?"Fais une première sauvegarde":"Dernière sauvegarde il y a "+age+" jours"} pour ne rien perdre.</span><button class="btn small" data-act="export">Sauvegarder</button></div>`}
+    if(age===null||age>30)html+=`<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:0">Tes données sont uniquement sur cet appareil. ${age===null?"Fais une première sauvegarde":"Dernière sauvegarde il y a "+age+" jours"} pour ne rien perdre.</span><button class="btn small" data-act="backup">Sauvegarder</button></div>`}
   const empty=!S.recurring.length&&!S.ops.length&&!S.accounts.length;
   if(empty&&tab!=="avenir")html+=emptyState();
   else html+={mois:viewMois,fixes:viewFixes,epargne:viewEpargne,avenir:viewAvenir}[tab]();
@@ -1177,15 +1199,13 @@ function settingsSheet(){
       <div class="field"><label for="sRate">Taux d'épargne visé (%)</label><input id="sRate" name="savingsTarget" inputmode="decimal" value="${esc(c.savingsTarget??"")}"></div>
     </div>
     ${mode==="api"?`<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-act="account">Mon compte · ${esc(ACCT||"")}</button></div>`:""}
-    <details ${mode==="local"?"open":""}><summary>Sauvegarde</summary><div class="actions" style="justify-content:flex-start;margin-top:10px"><button type="button" class="btn small" id="exp">Exporter (JSON)</button><label class="btn small" for="impF">Importer…</label><input type="file" id="impF" accept="application/json,.json" hidden></div><div class="note" id="impMsg"></div></details>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-act="backup">Sauvegarde et restauration</button>${mode==="local"?`<button type="button" class="btn small" data-act="gosync">Synchroniser sur plusieurs appareils</button>`:""}</div>
     <div class="actions"><button class="btn primary" ${readOnly?"disabled":""}>Enregistrer</button></div>`,
   async fd=>{const o={};["lifeBudget","cushion","age","retireAge","emergencyMonths","emergencyHorizon","savingsTarget"].forEach(k=>{const v=fd.get(k);o[k]=has(v)?num(v):null});
     if(o.age!==null&&(o.age<14||o.age>110))throw new Error("Âge invalide.");
     if(fd.get("lifeBank"))o.lifeBank=fd.get("lifeBank");
     await putConfig({...S.config,...o});longMonthly=null;toast("Réglages enregistrés")},
   f=>{
-    f.querySelector("#exp").addEventListener("click",exportJson);
-    f.querySelector("#impF").addEventListener("change",e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=async()=>{const msg=f.querySelector("#impMsg");try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.recurring))throw new Error();msg.innerHTML=`Remplacer toutes tes données par ce fichier ? <button type="button" class="btn small danger" id="impGo">Remplacer</button>`;f.querySelector("#impGo").addEventListener("click",async()=>{await importAll(d);closeSheet();toast("Données importées")})}catch{msg.textContent="Ce fichier n'est pas une sauvegarde de l'application."}};r.readAsText(file)});
   });
 }
 async function saveText(filename,data,type){
@@ -1195,16 +1215,35 @@ async function saveText(filename,data,type){
   try{const file=new File([blob],filename,{type});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});return}}catch(e){if(e&&e.name==="AbortError")return}
   const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);toast("Fichier téléchargé")}
 function markExport(){putConfig({...S.config,lastExport:todayISO()}).catch(()=>{})}
-async function exportJson(){
-  const data=JSON.stringify({version:1,exported:todayISO(),...S},null,2), filename=`comptes-${todayISO()}.json`;
-  let d=null;try{d=window.claude&&window.claude.use?await window.claude.use("downloads"):null}catch{d=null}
-  if(d){try{await d.save({filename,data});markExport();toast("Export prêt")}catch(e){toast(e&&e.code==="declined"?"Export annulé":"Export indisponible ici")}return}
-  const blob=new Blob([data],{type:"application/json"});
-  try{const file=new File([blob],filename,{type:"application/json"});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"Sauvegarde Comptes du foyer"});markExport();toast("Sauvegarde partagée");return}}
-  catch(e){if(e&&e.name==="AbortError")return}
-  const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);markExport();toast("Sauvegarde téléchargée")
-}
+function backupData(){return {filename:`comptes-du-foyer-${todayISO()}.json`,data:JSON.stringify({version:1,app:"comptes-du-foyer",exported:todayISO(),...S},null,2)}}
+function canShareFiles(){try{return !!(navigator.canShare&&navigator.share&&navigator.canShare({files:[new File(["{}"],"t.json",{type:"application/json"})]}))}catch{return false}}
+async function claudeSave(filename,data){if(!(window.claude&&window.claude.use))return null;let d=null;try{d=await window.claude.use("downloads")}catch{d=null}if(!d)return null;
+  try{await d.save({filename,data});markExport();toast("Sauvegarde prête");return true}catch(e){toast(e&&e.code==="declined"?"Sauvegarde annulée":"Sauvegarde indisponible ici");return false}}
+// Ouvre le menu de partage du téléphone : e-mail, WhatsApp, Drive, iCloud, Fichiers…
+async function shareBackup(){const {filename,data}=backupData();
+  if(window.claude&&window.claude.use){const r=await claudeSave(filename,data);if(r!==null)return r}
+  if(canShareFiles()){try{await navigator.share({files:[new File([data],filename,{type:"application/json"})],title:"Sauvegarde Comptes du foyer",text:`Sauvegarde de mes comptes du ${new Date().toLocaleDateString("fr-FR")}`});markExport();toast("Sauvegarde envoyée");return true}
+    catch(e){if(e&&e.name==="AbortError")return false}}
+  return downloadBackup()}
+async function downloadBackup(){const {filename,data}=backupData();
+  if(window.claude&&window.claude.use){const r=await claudeSave(filename,data);if(r!==null)return r}
+  const u=URL.createObjectURL(new Blob([data],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);markExport();toast("Sauvegarde téléchargée");return true}
+async function exportJson(){return shareBackup()}
+function backupSheet(){const le=S.config.lastExport,share=canShareFiles();
+  sheet("Sauvegarde",`<p class="muted" style="margin:0">${mode==="api"?"Tes données sont synchronisées sur ton compte. Une copie de sauvegarde reste une bonne sécurité.":"Tes données sont uniquement sur cet appareil. Garde une copie ailleurs : si le téléphone est perdu ou l'app supprimée, c'est elle qui te permettra de tout retrouver."}</p>
+    <div class="note">${le?`Dernière sauvegarde : ${new Date(le+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`:"Aucune sauvegarde pour l'instant."}</div>
+    <div class="bkbtns">
+      ${share?`<button type="button" class="bkbig primary" data-act="bkshare"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span><b>Partager ou envoyer…</b><small>E-mail, WhatsApp, Drive, iCloud, Fichiers…</small></span></button>`:""}
+      <button type="button" class="bkbig ${share?"":"primary"}" data-act="bkdl"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span><b>Télécharger le fichier</b><small>Dans les téléchargements de l'appareil</small></span></button>
+      <label class="bkbig" for="impF2"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg><span><b>Restaurer une sauvegarde…</b><small>Remplace les données actuelles</small></span></label><input type="file" id="impF2" accept="application/json,.json" hidden>
+    </div>
+    <div class="note" id="impMsg2"></div>
+    <p class="note" style="margin:0">Conseil : envoie-la vers ton Drive ou iCloud Drive, ou par e-mail à toi-même. Le fichier contient tout ton budget en clair : ne le partage pas avec d'autres personnes.</p>`,async()=>false,
+  f=>f.querySelector("#impF2").addEventListener("change",e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const msg=f.querySelector("#impMsg2");
+    try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.recurring))throw new Error();
+      msg.innerHTML=`Sauvegarde du ${esc(d.exported||"?")} : ${d.recurring.length} charges et entrées, ${(d.accounts||[]).length} comptes d'épargne. Remplacer toutes les données actuelles ? <button type="button" class="btn small danger" id="impGo2">Remplacer</button>`;
+      f.querySelector("#impGo2").addEventListener("click",async()=>{await importAll(d);closeSheet();toast("Sauvegarde restaurée")})}
+    catch{msg.textContent="Ce fichier n'est pas une sauvegarde de l'application."}};r.readAsText(file)}))}
 let toastT;function toast(t){document.querySelector(".toast")?.remove();const d=document.createElement("div");d.className="toast";d.setAttribute("role","status");d.textContent=t;document.body.appendChild(d);clearTimeout(toastT);toastT=setTimeout(()=>d.remove(),2200)}
 
 /* ---------- Stockage ---------- */
@@ -1303,6 +1342,15 @@ async function afterAuth(){mode="api";api.error=null;api.online=true;
   render();await flush();await pull()}
 
 /* ---------- Écrans de compte ---------- */
+function storageCompare(cur,compact){const col=(k,t)=>`<th scope="col" class="${cur===k?"cur":""}">${t}${cur===k?'<span class="curtag">ton mode</span>':""}</th>`;
+  const rows=[["Inscription","Aucune","E-mail + mot de passe"],["Où sont les données","Uniquement sur cet appareil","Sur tes appareils + serveur, chiffrées"],["Qui peut les lire","Toi seul","Toi seul : le serveur ne voit que du chiffré"],["Plusieurs appareils","Non","Oui, synchronisés"],["Téléphone perdu ou app supprimée","Tout est perdu, sauf ta sauvegarde","Tu te reconnectes et tu retrouves tout"],["Mot de passe oublié","Sans objet","Clé de secours obligatoire"],["Sauvegarde","Indispensable, à faire toi-même","Conseillée en plus"]];
+  const R=compact?rows.filter(r=>!["Qui peut les lire","Mot de passe oublié"].includes(r[0])):rows;
+  return `<div class="cmpwrap"><table class="cmp"><thead><tr><th></th>${col("local","Sans compte")}${col("api","Avec compte")}</tr></thead><tbody>${R.map(r=>`<tr><th scope="row">${r[0]}</th><td class="${cur==="local"?"cur":""}">${r[1]}</td><td class="${cur==="api"?"cur":""}">${r[2]}</td></tr>`).join("")}</tbody></table></div>`}
+function storageSheet(){const local=mode==="local";
+  sheet("Où sont mes données ?",`<p style="margin:0">${local?"Tu utilises l'app <b>sans compte</b> : tes données sont <b>uniquement sur cet appareil</b>. Rien n'est envoyé à un serveur.":`Tu es connecté avec <b>${esc(ACCT||"")}</b> : tes données sont <b>chiffrées sur ton appareil</b> puis synchronisées. Le serveur ne stocke que du chiffré, illisible sans ton mot de passe.`}</p>
+    ${storageCompare(local?"local":"api")}
+    ${local?`<p class="note" style="margin:0">${S.config.lastExport?`Dernière sauvegarde : ${new Date(S.config.lastExport+"T12:00").toLocaleDateString("fr-FR")}.`:"Tu n'as encore fait aucune sauvegarde."} Pense à en garder une hors du téléphone.</p>`:""}
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small primary" data-act="backup">Sauvegarde</button>${local?`<button type="button" class="btn small" data-act="gosync">Passer avec un compte</button>`:`<button type="button" class="btn small" data-act="account">Mon compte</button>`}</div>`,async()=>false)}
 function authView(){
   if(mode==="recovery")return `<section class="card authcard"><h2>Ta clé de secours</h2>
     <p style="margin:0">C'est <b>le seul moyen</b> de récupérer tes données si tu oublies ton mot de passe : elles sont chiffrées, personne d'autre ne peut les ouvrir, pas même le créateur de l'app.</p>
@@ -1337,7 +1385,12 @@ function authView(){
       <div class="field"><label for="rcPw2">Confirme</label><input id="rcPw2" type="password" autocomplete="new-password" required></div>
       <div class="err" id="authErr" hidden></div><button class="btn primary">Changer le mot de passe</button>
       <p class="note" style="margin:0">Sans clé de secours, les données ne peuvent pas être récupérées : tu peux seulement recréer un compte.</p></form>`;
-  return `<section class="card authcard"><h2>Comptes du foyer</h2><p class="muted" style="margin:0">Ton budget, chiffré, sur tous tes appareils.</p>${nav}${form}</section>`;
+  return `<section class="card authcard"><h2>Bienvenue</h2><p class="muted" style="margin:0">Deux façons d'utiliser l'app. Dans les deux cas : aucune publicité, aucune revente, personne d'autre que toi ne lit tes données.</p>
+    <div class="choice"><button type="button" class="btn" data-act="golocal">Utiliser sans compte</button><button type="button" class="btn primary" data-act="authgo">Avec un compte</button></div>
+    <p class="note" style="margin:-4px 0 0">Tu pourras passer de « sans compte » à « avec compte » plus tard, sans perdre tes données.</p>
+    ${storageCompare(null,true)}</section>
+  <section class="card authcard" id="authForms"><h2>Avec un compte</h2>${nav}${form}
+</section>`;
 }
 function authBusy(f,on,label){const b=f.querySelector(".btn.primary");if(b){b.disabled=on;if(on){b.dataset.l=b.textContent;b.textContent=label||"Un instant…"}else if(b.dataset.l)b.textContent=b.dataset.l}}
 function authErr(f,msg){const e=f.querySelector("#authErr");if(e){e.textContent=msg;e.hidden=false}}
@@ -1442,6 +1495,8 @@ async function boot(){
   if(!c){
     let saved=null;try{saved=JSON.parse(localStorage.getItem("comptes-foyer")||"null")}catch{}
     const inClaude=!!(window.claude&&window.claude.use);
+    let pref=null;try{pref=localStorage.getItem(MKEY)}catch{}
+    if(!inClaude&&pref==="local"){if(saved&&Array.isArray(saved.recurring))S={...S,...saved,config:{...DEFAULT_CFG,...(saved.config||{})}};mode="local";render();return}
     if(!inClaude){const pr=await probeApi();
       if(pr.s!=="none"){
         const sync=()=>{if(mode==="api"){api.error=null;api.online=true;flush().then(pull)}};
@@ -1481,7 +1536,15 @@ document.addEventListener("click",e=>{
   if(k==="prev"){viewMonth=addM(viewMonth,-1);render()} else if(k==="next"){viewMonth=addM(viewMonth,1);render()} else if(k==="today"){viewMonth=CUR;render()}
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
-  else if(k==="export")exportJson();
+  else if(k==="export")shareBackup();
+  else if(k==="backup")backupSheet();
+  else if(k==="storage")storageSheet();
+  else if(k==="authgo"){if(authTab==="recover")authTab="signup";render();document.getElementById("authForms")?.scrollIntoView({behavior:"smooth"});setTimeout(()=>document.querySelector("#authForms input")?.focus({preventScroll:true}),350)}
+  else if(k==="bkshare")shareBackup().then(ok=>{if(ok)closeSheet()});
+  else if(k==="bkdl")downloadBackup().then(ok=>{if(ok)closeSheet()});
+  else if(k==="golocal"){try{localStorage.setItem(MKEY,"local")}catch{}let sv=null;try{sv=JSON.parse(localStorage.getItem(PLAIN)||"null")}catch{}
+    S={config:{...DEFAULT_CFG},recurring:[],ops:[],accounts:[],projects:[],banks:[]};if(sv&&Array.isArray(sv.recurring))S={...S,...sv,config:{...DEFAULT_CFG,...(sv.config||{})}};mode="local";render()}
+  else if(k==="gosync"){fetch("/api/me",{cache:"no-store"}).then(r=>{if(r.status===404)throw new Error();try{localStorage.removeItem(MKEY)}catch{}persist();closeSheet();mode="auth";authTab="signup";render();toast("Crée un compte : tes données de cet appareil te seront proposées à l'import")}).catch(()=>toast("La synchronisation n'est pas disponible ici (connexion ou serveur)."))}
   else if(k==="todaydet")todaySheet(id);
   else if(k==="sim")simSheet();
   else if(k==="simapply"){const a=S.accounts.find(x=>x.id===sim.acc);if(a){const m=Math.round(num(sim.monthly)*100)/100;put("accounts",a.id,{...strip(a),monthly:m}).then(()=>{toast(`${a.name} : ${e0(m)}/mois`);updateSim()}).catch(x=>toast(x.message))}}
