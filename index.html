@@ -124,6 +124,19 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute
 .eq{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;margin-top:6px;padding:10px 12px;background:var(--sunk);border-radius:var(--r-s)}
 .eq .eqt{font-weight:700;border-top:1px solid var(--line);padding-top:4px;margin-top:2px}
 .pend summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--accent);margin-top:4px}
+.pgrp{display:flex;flex-direction:column;gap:4px}.pgrp+.pgrp{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.pgrp>div{display:flex;justify-content:space-between;gap:12px}
+.twarn{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1.15;letter-spacing:-.01em}
+.twarn b{color:var(--bad);font-size:40px;display:block;letter-spacing:-.02em}
+.ptwrap{display:flex;align-items:center;gap:4px}
+.ibtn{border:0;background:none;color:var(--muted);padding:2px;border-radius:999px;cursor:pointer;display:grid;place-items:center}
+.ibtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.ibtn[aria-expanded="true"]{color:var(--accent)} .ibtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.ptinfo{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;font-size:13.5px;background:var(--accent-soft);border-radius:12px;padding:8px 12px;margin-top:4px}
+.ptinfo .note{flex-basis:100%;margin:0} .ptinfo>span:not(.note){white-space:nowrap}
+.bankhead small{display:block;font-weight:500;font-size:10.5px;text-transform:none;letter-spacing:0}
+.banks.four .bankrow{grid-template-columns:minmax(80px,1fr) repeat(3,auto)!important}
+.banks.four .bankhead>span{font-family:inherit;font-size:11px;line-height:1.2;white-space:normal}
 .pendlist{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:14px}
 .pendlist>div{display:flex;justify-content:space-between;gap:12px}
 .today{display:flex;flex-direction:column;gap:6px;border-width:1.5px}
@@ -446,6 +459,19 @@ function todaySheet(B){const r=balanceOn(todayISO(),B==="all"?null:B);if(!r)retu
     <p class="note" style="margin:0">« Déjà dans le solde du point » : la ligne était débitée avant ton point, elle ne doit pas être retirée une seconde fois. Pense aussi à corriger son jour dans Fixes.</p>`,async()=>false,
   f=>f.querySelectorAll("[data-incl]").forEach(btn=>btn.addEventListener("click",async()=>{const st=S.config.start;if(!st)return;
     await putConfig({...S.config,start:{...st,passed:{...(st.passed||{}),[btn.dataset.incl]:true}}});toast("Compté comme déjà passé au point");todaySheet(B)})))}
+/* Prochain salaire (ligne d'entrée « salaire » avec un jour) et solde la veille, budget vie courante compris */
+function salaryLines(){return S.recurring.filter(r=>r.kind==="in"&&(norm(r.cat||"").includes("salaire")||norm(r.label||"").includes("salaire")))}
+function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function nextSalary(){const st=startInfo(),d=today.getDate(),N=addM(CUR,1),opts=[];
+  salaryLines().filter(r=>has(r.day)).forEach(r=>{for(const k of [CUR,N]){if(!recAmount(r,k))continue;const {y,m}=pm(k),day=Math.min(new Date(y,m,0).getDate(),num(r.day));
+    if(k===CUR&&(day<=d||(st&&st.k===CUR&&(st.passed||{})[r.id]===true)))continue;opts.push({r,date:k+"-"+String(day).padStart(2,"0")});break}});
+  const o=opts.sort((x,y)=>x.date.localeCompare(y.date))[0];if(!o)return null;
+  const dt=new Date(o.date+"T12:00");dt.setDate(dt.getDate()-1);o.before=isoOf(dt);return o}
+function lifeLeftUntil(iso,B){const L=lifePlan();if(!(L.total>0)||(B&&B!==lifeBankId()))return 0;const t=todaySpend();if(!t)return 0;
+  const k=iso.slice(0,7),dd=num(iso.slice(8,10));if(k===CUR)return t.res.R*Math.min(1,(dd-today.getDate()+1)/t.daysLeft);
+  const {y,m}=pm(k);return t.res.R+L.total*dd/new Date(y,m,0).getDate()}
+// Les lignes sans jour sont comptées comme passées d'ici là (comme dans le solde de fin de mois)
+function beforeSalary(sal,B){const r=balanceOn(sal.before,B);return r?r.v+sum(r.und,x=>x.v)-lifeLeftUntil(sal.before,B):null}
 function projBal(k,B){const st=startInfo();if(!st||k<st.k)return null;let b=B?num(st.balances[B]):st.total;for(let m=st.k;m<=k;m=addM(m,1))b+=flowFromStart(m,st,B).net;return b}
 /* ---------- Vie courante : budget global détaillé en enveloppes ---------- */
 function envs(){return Array.isArray(S.config.envelopes)?S.config.envelopes.filter(e=>e&&e.id&&e.name):[]}
@@ -472,7 +498,7 @@ function todaySpend(){
   const end=st&&k>=st.k?projBal(k):compute(k).resteEst, cashFree=end+res.R-num(S.config.cushion);
   const budgetDay=(res.R+spentToday)/daysLeft-spentToday, cashDay=(cashFree+spentToday)/daysLeft-spentToday;
   const byBudget=budgetDay<=cashDay, v=Math.min(budgetDay,cashDay);
-  return {v,byBudget,spentToday,daysLeft,perDay:Math.max(0,Math.min(res.R,cashFree)/daysLeft),res,cashFree,hasPoint:!!(st&&k>=st.k)}}
+  return {v,end,byBudget,spentToday,daysLeft,perDay:Math.max(0,Math.min(res.R,cashFree)/daysLeft),res,cashFree,hasPoint:!!(st&&k>=st.k)}}
 /* ---------- Combler un découvert prévu ---------- */
 const COVER_ROLES=["tampon","securite","projet"];
 function coverSources(k,B){const st=startInfo();
@@ -655,7 +681,9 @@ function viewMois(){
   const f=useStart?flowFromStart(viewMonth,st):{inc:c.inc,fix:c.recOut,save:c.save,vari:past?c.other+c.life:c.other+c.lifeProj,net:past?c.resteNow:c.resteEst};
   const v=useStart?projBal(viewMonth):f.net;
   const showToday=useStart&&viewMonth===CUR;
-  const perBank=useStart&&multi()?S.banks.map(b=>({b,v:projBal(viewMonth,b.id),from:viewMonth===st.k?num(st.balances[b.id]):projBal(addM(viewMonth,-1),b.id),now:showToday?balanceOn(todayISO(),b.id):null})):[];
+  const monthEnd=viewMonth+"-"+String(new Date(pm(viewMonth).y,pm(viewMonth).m,0).getDate()).padStart(2,"0");
+  const sal0=showToday?nextSalary():null, sal=sal0&&sal0.before>todayISO()&&sal0.before!==monthEnd?sal0:null;
+  const perBank=useStart&&multi()?S.banks.map(b=>({b,v:projBal(viewMonth,b.id),from:viewMonth===st.k?num(st.balances[b.id]):projBal(addM(viewMonth,-1),b.id),now:showToday?balanceOn(todayISO(),b.id):null,bs:sal?beforeSalary(sal,b.id):null})):[];
   const nowTot=showToday?balanceOn(todayISO(),null):null;
   const negBank=perBank.some(x=>x.v<0);
   const status=v<0?["bad",useStart?"Découvert prévu":"Dans le rouge"]:negBank?["warn","Un compte à découvert"]:v<num(S.config.cushion)?["warn","Marge faible"]:["good","Ça tient"];
@@ -669,11 +697,11 @@ function viewMois(){
   ${!isCur?`<div style="text-align:center;margin-top:-10px"><button class="btn small" data-act="today">Revenir à ce mois-ci</button></div>`:""}
   ${!st&&!readOnly?`<section class="card" style="display:flex;flex-direction:column;gap:8px;border-color:var(--accent)"><h2>Fais le point sur ton compte</h2><p class="muted" style="margin:0">Indique combien tu as aujourd'hui sur ton compte courant et ce qui est déjà passé ce mois-ci. L'application calcule ensuite ton solde prévu, mois après mois.</p><div><button class="btn primary" data-act="start">Faire le point</button></div></section>`:""}
   ${st&&viewMonth<st.k?`<div class="banner">Ce mois est avant ton point de départ du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR")} : il est affiché sans solde de compte.</div>`:""}
-  ${bubble({v,c,f,st,status,useStart,inStart,past,isCur})}
+  ${bubble({v,c,f,st,status,useStart,inStart,past,isCur,nowTot})}
   ${isCur?todayCard():""}
   <section class="card hero" id="moisdet">
     <div class="k">Détail du mois</div>
-    ${perBank.length?`<div class="banks ${showToday?"four":""}"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span>${showToday?`<span class="num">aujourd'hui</span>`:""}<span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span>${showToday?`<button type="button" class="num today-col linkbtn ${x.now.v<0?"negt":""}" data-act="todaydet:${x.b.id}" aria-label="Détail du calcul pour ${esc(x.b.name)}">${e0(x.now.v)}</button>`:""}<b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}${showToday?`<p class="note" style="margin:4px 0 0">« Aujourd'hui » : ce que ta banque devrait afficher si tout est saisi (point + prélèvements datés et opérations passés depuis). Touche un montant pour voir le détail. Un écart = une dépense ou une rentrée oubliée${nowTot.undated?`, ou une des ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour du mois`:""}.</p>`:""}</div>`:showToday&&nowTot?`<div class="note" style="margin-top:4px">Aujourd'hui sur ton compte (théorique) : <button type="button" class="num today-col linkbtn" data-act="todaydet:all">${e0(nowTot.v)}</button>${nowTot.undated?` · ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour non comptée${nowTot.undated>1?"s":""}`:""}</div>`:""}
+    ${showToday?bankTable({st,perBank,nowTot,sal,v}):perBank.length?`<div class="banks"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span><span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span><b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}</div>`:""}
     <div class="flow" role="img" aria-label="Répartition des entrées du mois">${seg(f.fix,"c-fix")}${seg(f.save,"c-save")}${seg(f.vari,"c-var")}${seg(Math.max(0,f.net),"c-rest")}${seg(over,"c-over")}</div>
     <div class="legend">
       <div><i class="c-fix"></i>${inStart?"Charges encore à venir":"Charges fixes"}<b>${e0(f.fix)}</b></div>
@@ -682,7 +710,7 @@ function viewMois(){
       <div><i class="${f.net<0?"c-over":"c-rest"}"></i>${f.net<0?"Manque du mois":"Reste du mois"}<b>${e0(f.net)}</b></div>
     </div>
     ${inStart?`<div class="eq"><span>Solde au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><b class="num">${e0(st.total)}</b>${f.inc+f.tin>0?`<span>+ entrées encore à venir</span><b class="num">${e0(f.inc)}</b>`:""}<span>− sorties encore à venir</span><b class="num">${e0(f.fix+f.save+f.vari)}</b><span class="eqt">= solde prévu fin ${monthName(viewMonth,true)}</span><b class="num eqt">${e0(v)}</b></div>
-    <details class="pend"><summary>Ce qui est compté comme « encore à venir » (${pend.length})</summary><div class="pendlist">${pend.map(x=>`<div><span>${esc(x.l)}${x.d?` <span class="note">le ${x.d}</span>`:""}</span><span class="num">${x.s}${e2(x.a)}</span></div>`).join("")||'<span class="note">Rien : tout est déjà passé.</span>'}</div><p class="note" style="margin:6px 0 0">Si une ligne est déjà passée sur ton compte, refais le point et coche-la : sinon elle est retirée deux fois.</p></details>`:`<div class="note">${useStart?`Solde de départ du mois ${e0(v-f.net)} · ${e0(f.inc)} d'entrées.`:`Sur ${e0(f.inc)} d'entrées ce mois-ci.`}</div>`}
+    ${pendBlock(st,pend)}`:`<div class="note">${useStart?`Solde de départ du mois ${e0(v-f.net)} · ${e0(f.inc)} d'entrées.`:`Sur ${e0(f.inc)} d'entrées ce mois-ci.`}</div>`}
     ${st&&!readOnly?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">${stOld?'<span class="pill warn">Point de plus d\'un mois</span>':""}<button class="btn small" data-act="start">Refaire le point</button></div>`:""}
     ${useStart&&viewMonth===st.k&&c.budget>0?`<div class="note" style="margin-top:6px">Vie courante d'ici la fin du mois : ${e0(f.allowance)} réservés (au prorata des jours restants), ${e0(f.life)} saisis depuis le point.</div>`:c.budget>0?`<div class="note" style="margin-top:6px">Dont vie courante : ${e0(c.life)} saisis sur un budget de ${e0(c.budget)}${c.lifeProj>c.life?` (le reste du budget est déjà réservé)`:""}.</div>`:""}
     ${isCur&&c.budget>0?gauge(c):""}
@@ -693,7 +721,35 @@ function viewMois(){
   <section class="sec"><div class="sechead"><h2>Opérations du mois</h2></div>${opsList(c)}</section>`;
   return h;
 }
-function bubble({v,c,f,st:pt,status,useStart,inStart,past,isCur}){
+function pendBlock(st,pend){
+  const cur=st.k===CUR,d=today.getDate();
+  const done=pend.filter(x=>has(x.d)&&(!cur||num(x.d)<=d)), todo=pend.filter(x=>has(x.d)&&cur&&num(x.d)>d), nod=pend.filter(x=>!has(x.d));
+  const li=L=>L.map(x=>`<div><span>${esc(x.l)}${has(x.d)?` <span class="note">le ${x.d}</span>`:""}</span><span class="num">${x.s}${e2(x.a)}</span></div>`).join("");
+  const grp=(t,n,L)=>L.length?`<div class="pgrp"><b>${t}</b>${n?`<span class="note">${n}</span>`:""}${li(L)}</div>`:"";
+  const ptD=new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  return `<details class="pend"><summary>Compté depuis le point du ${ptD} (${pend.length})${done.length?` · ${done.length} déjà passé${done.length>1?"s":""}`:""}</summary><div class="pendlist">
+    ${pend.length?grp("Passé depuis le point","Normalement déjà visible sur ton relevé.",done)+grp("Encore à venir","",todo)+grp("Sans jour du mois","Comptées comme à venir. Ajoute leur jour dans Fixes pour qu'elles se rangent toutes seules.",nod):'<span class="note">Rien : tout était déjà passé au point.</span>'}
+  </div><p class="note" style="margin:6px 0 0">Ces lignes partent toutes du solde au point. Si l'une était déjà débitée <i>avant</i> le point, refais le point et coche-la : sinon elle est retirée deux fois.</p></details>`;
+}
+function bankTable({st,perBank,nowTot,sal,v}){
+  const fin=monthName(viewMonth,true), salD=sal&&new Date(sal.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  const salFirst=sal&&sal.before.slice(0,7)===viewMonth;
+  const cols=[{h:`auj.<small>${today.getDate()} ${fin}</small>`,get:x=>x.now.v,btn:true}];
+  const cSal={h:`av. salaire<small>${salD}</small>`,get:x=>x.bs},cFin={h:`fin<small>${fin}</small>`,get:x=>x.v,bold:true};
+  if(sal)salFirst?cols.push(cSal,cFin):cols.push(cFin,cSal);else cols.push(cFin);
+  const ptDate=new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  const ptInfo=`<div class="ptinfo" id="ptinfo" hidden><b>Point du ${ptDate}</b>${multi()?S.banks.map(b=>`<span>${esc(b.name)} <span class="num">${e0(num(st.balances[b.id]))}</span></span>`).join(""):`<span class="num">${e0(st.total)}</span>`}<span class="note">Les soldes que tu as saisis. Tout part de là.</span></div>`;
+  const ib=`<button type="button" class="ibtn" data-act="ptinfo" aria-expanded="false" aria-controls="ptinfo" aria-label="Voir les soldes au point du ${ptDate}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>`;
+  const missDay=!sal&&salaryLines().some(r=>!has(r.day));
+  const cell=(c,x)=>{const n=c.get(x);if(n==null)return `<span class="num muted">–</span>`;const cls=`num ${n<0?"negt":""}`;
+    return c.btn?`<button type="button" class="${cls} today-col linkbtn" data-act="todaydet:${x.b?x.b.id:"all"}" aria-label="Détail du calcul${x.b?" pour "+esc(x.b.name):""}">${e0(n)}</button>`:c.bold?`<b class="${cls}">${e0(n)}</b>`:`<span class="${cls}">${e0(n)}</span>`};
+  const rows=perBank.length?perBank:[{b:null,now:nowTot,v,bs:sal?beforeSalary(sal,null):null}];
+  return `<div class="banks ${cols.length>2?"four":""}"><div class="bankrow bankhead"><span class="ptwrap">${perBank.length?"Compte":"Ton compte"}${ib}</span>${cols.map(c=>`<span class="num">${c.h}</span>`).join("")}</div>
+    ${rows.map(x=>`<div class="bankrow"><span>${x.b?esc(x.b.name):"Compte courant"}</span>${cols.map(c=>cell(c,x)).join("")}</div>`).join("")}
+    ${ptInfo}
+    <p class="note" style="margin:4px 0 0">« Auj. » : ce que ta banque devrait afficher si tout est saisi. Touche un montant pour le détail.${sal?` « Av. salaire » : ce qu'il restera la veille du salaire du ${salD}${lifePlan().total>0?", budget vie courante déduit":""}.`:""}${nowTot.undated?` ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour du mois ne ${nowTot.undated>1?"sont":"est"} pas comptée${nowTot.undated>1?"s":""} aujourd'hui.`:""}${missDay?` Indique le jour du salaire dans Fixes pour voir ce qu'il reste jusqu'à sa rentrée.`:""}</p></div>`;
+}
+function bubble({v,c,f,st:pt,status,useStart,inStart,past,isCur,nowTot}){
   const {y,m}=pm(viewMonth),dim=new Date(y,m,0).getDate(),left=isCur?dim-today.getDate()+1:0;
   const fin=monthName(viewMonth,true);
   const title=useStart?(past?`Solde fin ${fin}`:`Solde prévu fin ${fin}`):past?"Il t'est resté":`Reste prévu fin ${fin}`;
@@ -704,7 +760,9 @@ function bubble({v,c,f,st:pt,status,useStart,inStart,past,isCur}){
   const ico={in:'<path d="M17 7L7 17M7 9v8h8"/>',out:'<path d="M7 17L17 7M9 7h8v8"/>',up:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',pt:'<path d="M5 12l4 4L19 6"/>',sav:'<ellipse cx="12" cy="7" rx="6" ry="2.5"/><path d="M6 7v5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V7M6 12v5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-5"/>'};
   const st=(i,l,n)=>`<div class="bst"><span class="bk"><svg viewBox="0 0 24 24" aria-hidden="true">${ico[i]}</svg>${l}</span><b class="num">${e0(n)}</b></div>`;
   const out=f.fix+f.save+f.vari;
-  const stats=inStart?[st("pt","Au point",pt.total),st("in","À recevoir",f.inc),st("out","À payer",out)]
+  let fin2=null;if(nowTot){const {y,m}=pm(viewMonth),r=balanceOn(viewMonth+"-"+String(new Date(y,m,0).getDate()).padStart(2,"0"),null),t=todayISO();
+    const inc=sum(r.items.filter(x=>x.dt>t&&x.v>0),x=>x.v)+sum(r.und.filter(x=>x.v>0),x=>x.v);fin2={inc,out:nowTot.v+inc-v}}
+  const stats=fin2?[st("pt","Aujourd'hui",nowTot.v),st("in","À recevoir",fin2.inc),st("out","À payer",fin2.out)]:inStart?[st("pt","Au point",pt.total),st("in","À recevoir",f.inc),st("out","À payer",out)]
     :useStart?[st("pt","Départ",v-f.net),st("in","Entrées",f.inc),st("out","Sorties",out)]
     :[st("in","Entrées",c.inc),st("out","Sorties",outAll),st("sav","Dont épargne",c.save)];
   return `<section class="bubble ${v<0?"neg":status[0]==="warn"?"warn":""}" aria-label="${esc(title)} : ${e0(v)}">
@@ -725,12 +783,24 @@ function todayNote(t){
   const why=t.byBudget?"Limité par ton budget vie courante.":`Limité par ${t.hasPoint?"ton compte":"ton reste du mois"} (marge de ${e0(cush)} gardée).`;
   return `${why}${t.spentToday?` Déjà dépensé aujourd'hui : ${e0(t.spentToday)}.`:""}${t.daysLeft>1?` Rythme : environ <b>${e0(t.perDay)}/jour</b> ${fin}.`:" Dernier jour du mois."}`;
 }
+function todayWarn(t){
+  const cush=num(S.config.cushion), fin=monthName(CUR,true), noMore=t.end+t.res.R, last=new Date(pm(CUR).y,pm(CUR).m,0).getDate();
+  const tomorrow=t.daysLeft>1?Math.max(0,Math.min(t.res.R,t.cashFree))/(t.daysLeft-1):0;
+  if(noMore<0)return {amt:noMore,msg:`Même sans nouvelle dépense courante, tes comptes finiront ${fin} à ${e0(noMore)}. Chaque achat creuse ce découvert : décale ce qui peut l'être.`};
+  if(t.res.spent>t.res.total)return {amt:t.res.total-t.res.spent,msg:`Ton budget vie courante est dépassé de ${e0(t.res.spent-t.res.total)} ce mois-ci.${noMore-cush>0?` Ton compte suit encore (${e0(noMore-cush)} au-dessus de ta marge), mais tout nouvel achat sort du budget.`:""}`};
+  if(noMore<cush)return {amt:noMore-cush,msg:`Fin ${fin}, il resterait ${e0(noMore)} sur tes comptes, soit ${e0(cush-noMore)} sous ta marge de sécurité de ${e0(cush)}.`};
+  return {amt:t.v,msg:`Tu as dépassé ta part du jour (${e0(t.spentToday)} dépensés aujourd'hui).${tomorrow>0?` À partir de demain : environ <b>${e0(tomorrow)}/jour</b> jusqu'au ${last}.`:""}`};
+}
 function todayCard(){
   const t=todaySpend();
   if(!t)return readOnly?"":`<section class="card today"><div class="k">Dépensable aujourd'hui</div><p class="muted" style="margin:0">Règle ton budget vie courante (courses, essence, sorties…) pour savoir chaque jour combien tu peux dépenser sans te mettre dans le rouge.</p><div><button class="btn small primary" data-act="budget">Régler mon budget</button></div></section>`;
-  const v=Math.max(0,t.v), lvl=t.v<=0?"bad":t.v<5?"warn":"good";
+  if(t.v<=0){const w=todayWarn(t);
+    return `<section class="card today bad"><div class="k"><span class="pill bad">Attention</span></div>
+    <div class="twarn">Tu es déjà à <b class="num">${e0(w.amt)}</b></div>
+    <div class="note">${w.msg}</div></section>`}
+  const lvl=t.v<5?"warn":"good";
   return `<section class="card today ${lvl}"><div class="k">Tu peux dépenser aujourd'hui</div>
-    <div class="tbig ${t.v<=0?"neg":""}">${e0(v)}</div>
+    <div class="tbig">${e0(t.v)}</div>
     <div class="note">${todayNote(t)}</div></section>`;
 }
 function envSection(k){
@@ -1583,6 +1653,7 @@ document.addEventListener("click",e=>{
   else if(k==="tab"){closeSheet();tab=id;render();window.scrollTo({top:0})}
   else if(k==="settings")settingsSheet();
   else if(k==="export")shareBackup();
+  else if(k==="ptinfo"){const pi=$("#ptinfo");if(pi){pi.hidden=!pi.hidden;t.setAttribute("aria-expanded",String(!pi.hidden))}}
   else if(k==="bubbledet"){const d=$("#moisdet");if(d){d.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});d.classList.remove("flash");void d.offsetWidth;d.classList.add("flash")}}
   else if(k==="addctx"){if(readOnly){toast("Lecture seule");return}({mois:opSheet,fixes:()=>recSheet(),epargne:()=>accSheet(),avenir:opSheet}[tab]||opSheet)()}
   else if(k==="backup")backupSheet();
