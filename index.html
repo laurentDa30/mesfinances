@@ -704,12 +704,12 @@ function viewMois(){
     ${showToday?bankTable({st,perBank,nowTot,sal,v}):perBank.length?`<div class="banks"><div class="bankrow bankhead"><span>Compte</span><span class="num">${viewMonth===st.k?"au point":"début du mois"}</span><span class="num">fin ${monthName(viewMonth,true)}</span></div>${perBank.map(x=>`<div class="bankrow"><span>${esc(x.b.name)}</span><span class="num muted">${e0(x.from)}</span><b class="num ${x.v<0?"negt":""}">${e0(x.v)}</b></div>`).join("")}</div>`:""}
     <div class="flow" role="img" aria-label="Répartition des entrées du mois">${seg(f.fix,"c-fix")}${seg(f.save,"c-save")}${seg(f.vari,"c-var")}${seg(Math.max(0,f.net),"c-rest")}${seg(over,"c-over")}</div>
     <div class="legend">
-      <div><i class="c-fix"></i>${inStart?"Charges encore à venir":"Charges fixes"}<b>${e0(f.fix)}</b></div>
-      <div><i class="c-save"></i>${inStart?"Épargne encore à venir":"Épargne versée"}<b>${e0(f.save)}</b></div>
+      <div><i class="c-fix"></i>${inStart?"Charges depuis le point":"Charges fixes"}<b>${e0(f.fix)}</b></div>
+      <div><i class="c-save"></i>${inStart?"Épargne depuis le point":"Épargne versée"}<b>${e0(f.save)}</b></div>
       <div><i class="c-var"></i>Dépenses ponctuelles<b>${e0(f.vari)}</b></div>
-      <div><i class="${f.net<0?"c-over":"c-rest"}"></i>${f.net<0?"Manque du mois":"Reste du mois"}<b>${e0(f.net)}</b></div>
+      <div><i class="${f.net<0?"c-over":"c-rest"}"></i>${inStart?"Net depuis le point":f.net<0?"Manque du mois":"Reste du mois"}<b>${e0(f.net)}</b></div>
     </div>
-    ${inStart?`<div class="eq"><span>Solde au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><b class="num">${e0(st.total)}</b>${f.inc+f.tin>0?`<span>+ entrées encore à venir</span><b class="num">${e0(f.inc)}</b>`:""}<span>− sorties encore à venir</span><b class="num">${e0(f.fix+f.save+f.vari)}</b><span class="eqt">= solde prévu fin ${monthName(viewMonth,true)}</span><b class="num eqt">${e0(v)}</b></div>
+    ${inStart&&nowTot?(()=>{const r=restOfMonth(nowTot,v),moved=nowTot.v-st.total;return `<div class="eq"><span>Solde au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><b class="num">${e0(st.total)}</b><span>${moved<0?"−":"+"} passé depuis</span><b class="num">${e0(Math.abs(moved))}</b><span class="eqt">= aujourd'hui (théorique)</span><b class="num eqt">${e0(nowTot.v)}</b>${r.inc>0?`<span>+ entrées encore à venir</span><b class="num">${e0(r.inc)}</b>`:""}<span>− sorties encore à venir</span><b class="num">${e0(r.out)}</b><span class="eqt">= solde prévu fin ${monthName(viewMonth,true)}</span><b class="num eqt">${e0(v)}</b></div>${lifePlan().total>0?`<p class="note" style="margin:0">Les sorties à venir comprennent le reste du budget vie courante (${e0(todaySpend()?.res.R||0)}), qui baisse à mesure que tu saisis tes dépenses.</p>`:""}`})()+"\n    "+pendBlock(st,pend):inStart?`<div class="eq"><span>Solde au point du ${new Date(st.date+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><b class="num">${e0(st.total)}</b>${f.inc+f.tin>0?`<span>+ entrées encore à venir</span><b class="num">${e0(f.inc)}</b>`:""}<span>− sorties encore à venir</span><b class="num">${e0(f.fix+f.save+f.vari)}</b><span class="eqt">= solde prévu fin ${monthName(viewMonth,true)}</span><b class="num eqt">${e0(v)}</b></div>
     ${pendBlock(st,pend)}`:`<div class="note">${useStart?`Solde de départ du mois ${e0(v-f.net)} · ${e0(f.inc)} d'entrées.`:`Sur ${e0(f.inc)} d'entrées ce mois-ci.`}</div>`}
     ${st&&!readOnly?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">${stOld?'<span class="pill warn">Point de plus d\'un mois</span>':""}<button class="btn small" data-act="start">Refaire le point</button></div>`:""}
     ${useStart&&viewMonth===st.k&&c.budget>0?`<div class="note" style="margin-top:6px">Vie courante d'ici la fin du mois : ${e0(f.allowance)} réservés (au prorata des jours restants), ${e0(f.life)} saisis depuis le point.</div>`:c.budget>0?`<div class="note" style="margin-top:6px">Dont vie courante : ${e0(c.life)} saisis sur un budget de ${e0(c.budget)}${c.lifeProj>c.life?` (le reste du budget est déjà réservé)`:""}.</div>`:""}
@@ -749,6 +749,9 @@ function bankTable({st,perBank,nowTot,sal,v}){
     ${ptInfo}
     <p class="note" style="margin:4px 0 0">« Auj. » : ce que ta banque devrait afficher si tout est saisi. Touche un montant pour le détail.${sal?` « Av. salaire » : ce qu'il restera la veille du salaire du ${salD}${lifePlan().total>0?", budget vie courante déduit":""}.`:""}${nowTot.undated?` ${nowTot.undated} ligne${nowTot.undated>1?"s":""} sans jour du mois ne ${nowTot.undated>1?"sont":"est"} pas comptée${nowTot.undated>1?"s":""} aujourd'hui.`:""}${missDay?` Indique le jour du salaire dans Fixes pour voir ce qu'il reste jusqu'à sa rentrée.`:""}</p></div>`;
 }
+/* D'aujourd'hui à la fin du mois : entrées attendues, et sorties déduites pour que aujourd'hui + entrées − sorties = solde prévu */
+function restOfMonth(nowTot,v){const {y,m}=pm(viewMonth),r=balanceOn(viewMonth+"-"+String(new Date(y,m,0).getDate()).padStart(2,"0"),null),t=todayISO();
+  const inc=sum(r.items.filter(x=>x.dt>t&&x.v>0),x=>x.v)+sum(r.und.filter(x=>x.v>0),x=>x.v);return {inc,out:nowTot.v+inc-v}}
 function bubble({v,c,f,st:pt,status,useStart,inStart,past,isCur,nowTot}){
   const {y,m}=pm(viewMonth),dim=new Date(y,m,0).getDate(),left=isCur?dim-today.getDate()+1:0;
   const fin=monthName(viewMonth,true);
@@ -760,8 +763,7 @@ function bubble({v,c,f,st:pt,status,useStart,inStart,past,isCur,nowTot}){
   const ico={in:'<path d="M17 7L7 17M7 9v8h8"/>',out:'<path d="M7 17L17 7M9 7h8v8"/>',up:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',pt:'<path d="M5 12l4 4L19 6"/>',sav:'<ellipse cx="12" cy="7" rx="6" ry="2.5"/><path d="M6 7v5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V7M6 12v5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-5"/>'};
   const st=(i,l,n)=>`<div class="bst"><span class="bk"><svg viewBox="0 0 24 24" aria-hidden="true">${ico[i]}</svg>${l}</span><b class="num">${e0(n)}</b></div>`;
   const out=f.fix+f.save+f.vari;
-  let fin2=null;if(nowTot){const {y,m}=pm(viewMonth),r=balanceOn(viewMonth+"-"+String(new Date(y,m,0).getDate()).padStart(2,"0"),null),t=todayISO();
-    const inc=sum(r.items.filter(x=>x.dt>t&&x.v>0),x=>x.v)+sum(r.und.filter(x=>x.v>0),x=>x.v);fin2={inc,out:nowTot.v+inc-v}}
+  const fin2=nowTot?restOfMonth(nowTot,v):null;
   const stats=fin2?[st("pt","Aujourd'hui",nowTot.v),st("in","À recevoir",fin2.inc),st("out","À payer",fin2.out)]:inStart?[st("pt","Au point",pt.total),st("in","À recevoir",f.inc),st("out","À payer",out)]
     :useStart?[st("pt","Départ",v-f.net),st("in","Entrées",f.inc),st("out","Sorties",out)]
     :[st("in","Entrées",c.inc),st("out","Sorties",outAll),st("sav","Dont épargne",c.save)];
